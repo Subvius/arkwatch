@@ -150,10 +150,7 @@ export const App = (): React.JSX.Element => {
   const aiStats = React.useMemo(() => computeAIStats(topApps), [topApps]);
 
   const isClaudeRunning = aiProcesses.find((p) => p.id === 'claude')?.running ?? false;
-  // Codex detection: check if it's in the top apps (foreground window tracker catches it)
-  const isCodexRunning = topApps.some(
-    (app) => detectAITool(app.appName, app.exePath) === 'codex' && app.activeSeconds > 0
-  );
+  const isCodexRunning = aiProcesses.find((p) => p.id === 'codex')?.running ?? false;
 
   const dailyGoalSeconds = 8 * 3600;
 
