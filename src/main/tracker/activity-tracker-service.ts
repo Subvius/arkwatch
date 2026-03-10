@@ -10,10 +10,10 @@ export class ActivityTrackerService {
   constructor(
     private readonly source: ActivitySource,
     private readonly database: ArkWatchDatabase,
-    idleThresholdSeconds: number,
+    private idleThresholdSeconds: number,
     private readonly pollIntervalMs = 1000
   ) {
-    this.core = new ActivityTrackerCore(idleThresholdSeconds, async (session) => {
+    this.core = new ActivityTrackerCore(this.idleThresholdSeconds, async (session) => {
       await this.database.insertSession(session);
     });
   }
@@ -70,15 +70,20 @@ export class ActivityTrackerService {
   }
 
   setIdleThreshold(seconds: number): void {
+    this.idleThresholdSeconds = seconds;
     this.core.setIdleThreshold(seconds);
   }
 
   private async pollOnce(): Promise<void> {
-    try {
-      const [app, idleSeconds] = await Promise.all([this.source.getActiveApp(), Promise.resolve(this.source.getIdleSeconds())]);
-      await this.core.tick(new Date(), app, idleSeconds);
-    } catch {
-      await this.core.tick(new Date(), null, this.source.getIdleSeconds());
-    }
+    const [appResult, idleResult] = await Promise.allSettled([
+      this.source.getActiveApp(),
+      Promise.resolve().then(() => this.source.getIdleSeconds(this.idleThresholdSeconds))
+    ]);
+
+    const app = appResult.status === 'fulfilled' ? appResult.value : null;
+    const idleSeconds = idleResult.status === 'fulfilled' ? idleResult.value : 0;
+
+    await this.core.tick(new Date(), app, idleSeconds);
   }
 }
+
