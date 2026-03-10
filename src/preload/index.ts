@@ -20,6 +20,9 @@ const api: ArkWatchApi = {
   processes: {
     getAITools: () => ipcRenderer.invoke(IPC_CHANNELS.processesGetAITools)
   },
+  icons: {
+    getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params)
+  },
   window: {
     minimize: () => ipcRenderer.send(IPC_CHANNELS.windowMinimize),
     maximize: () => ipcRenderer.send(IPC_CHANNELS.windowMaximize),
@@ -28,3 +31,4 @@ const api: ArkWatchApi = {
 };
 
 contextBridge.exposeInMainWorld('arkwatch', api);
+

@@ -8,6 +8,7 @@ export const IPC_CHANNELS = {
   settingsGet: 'settings.get',
   settingsUpdate: 'settings.update',
   processesGetAITools: 'processes.getAITools',
+  iconsGetAppIcon: 'icons.getAppIcon',
   windowMinimize: 'window.minimize',
   windowMaximize: 'window.maximize',
   windowClose: 'window.close'
