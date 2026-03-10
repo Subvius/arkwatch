@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
 import { PauseCircle, PlayCircle, Settings2 } from 'lucide-react';
-import type { AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus } from '../../shared/types';
 import { formatDuration } from './lib/utils';
-import { detectAITool, AI_TOOLS, type AIToolId } from './lib/ai-tools';
+import { AI_TOOLS, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { Input } from './components/ui/input';
@@ -30,18 +30,26 @@ const idleLabel = (idleSeconds: number): string => {
 
 type AIToolStats = Record<AIToolId, { activeSeconds: number; sessionCount: number }>;
 
-const computeAIStats = (apps: TopAppStat[]): AIToolStats => {
+const emptyAIToolStats: AIToolStats = {
+  claude: { activeSeconds: 0, sessionCount: 0 },
+  codex: { activeSeconds: 0, sessionCount: 0 }
+};
+
+const mapDailyStatsToAIToolStats = (dailyStats: AIToolDailyStat[]): AIToolStats => {
   const stats: AIToolStats = {
     claude: { activeSeconds: 0, sessionCount: 0 },
     codex: { activeSeconds: 0, sessionCount: 0 }
   };
 
-  for (const app of apps) {
-    const tool = detectAITool(app.appName, app.exePath);
-    if (tool) {
-      stats[tool].activeSeconds += app.activeSeconds;
-      stats[tool].sessionCount += 1;
+  for (const stat of dailyStats) {
+    if (!stats[stat.id]) {
+      continue;
     }
+
+    stats[stat.id] = {
+      activeSeconds: stat.activeSeconds,
+      sessionCount: stat.sessionCount
+    };
   }
 
   return stats;
@@ -59,6 +67,7 @@ export const App = (): React.JSX.Element => {
   const [weekSummary, setWeekSummary] = React.useState<SummaryStats>(emptySummary);
   const [topApps, setTopApps] = React.useState<TopAppStat[]>([]);
   const [aiProcesses, setAiProcesses] = React.useState<AIToolProcess[]>([]);
+  const [aiStats, setAiStats] = React.useState<AIToolStats>(emptyAIToolStats);
   const [settings, setSettings] = React.useState<AppSettings>({ idleThresholdSeconds: 300, launchAtLogin: true });
   const [draftIdle, setDraftIdle] = React.useState('300');
   const [draftLaunchAtLogin, setDraftLaunchAtLogin] = React.useState(true);
@@ -87,6 +96,14 @@ export const App = (): React.JSX.Element => {
     setTopApps(apps);
   }, []);
 
+  const loadAIStats = React.useCallback(async () => {
+    const now = new Date();
+    const todayFrom = startOfDay(now).toISOString();
+    const todayTo = endOfDay(now).toISOString();
+    const dailyStats = await window.arkwatch.stats.getAIToolDailyStats({ from: todayFrom, to: todayTo });
+    setAiStats(mapDailyStatsToAIToolStats(dailyStats));
+  }, []);
+
   const loadProcesses = React.useCallback(async () => {
     const processes = await window.arkwatch.processes.getAITools();
     setAiProcesses(processes);
@@ -100,7 +117,7 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   React.useEffect(() => {
-    void Promise.all([loadStatus(), loadData(), loadProcesses(), loadSettings()]);
+    void Promise.all([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings()]);
 
     const statusTimer = window.setInterval(() => {
       void loadStatus();
@@ -108,6 +125,7 @@ export const App = (): React.JSX.Element => {
 
     const dataTimer = window.setInterval(() => {
       void loadData();
+      void loadAIStats();
     }, 10_000);
 
     const processTimer = window.setInterval(() => {
@@ -119,12 +137,13 @@ export const App = (): React.JSX.Element => {
       window.clearInterval(dataTimer);
       window.clearInterval(processTimer);
     };
-  }, [loadData, loadProcesses, loadSettings, loadStatus]);
+  }, [loadAIStats, loadData, loadProcesses, loadSettings, loadStatus]);
 
   const toggleTracking = async (): Promise<void> => {
     const next = await window.arkwatch.tracker.toggle();
     setStatus(next);
     await loadData();
+    await loadAIStats();
   };
 
   const saveSettings = async (): Promise<void> => {
@@ -147,13 +166,8 @@ export const App = (): React.JSX.Element => {
     [weekSummary.days]
   );
 
-  const aiStats = React.useMemo(() => computeAIStats(topApps), [topApps]);
-
   const isClaudeRunning = aiProcesses.find((p) => p.id === 'claude')?.running ?? false;
-  // Codex detection: check if it's in the top apps (foreground window tracker catches it)
-  const isCodexRunning = topApps.some(
-    (app) => detectAITool(app.appName, app.exePath) === 'codex' && app.activeSeconds > 0
-  );
+  const isCodexRunning = aiProcesses.find((p) => p.id === 'codex')?.running ?? false;
 
   const dailyGoalSeconds = 8 * 3600;
 

@@ -22,15 +22,49 @@ const PROCESS_RULES: ProcessRule[] = [
     appName: 'Claude Code',
     exePath: 'claude.exe',
     match: (name) => name.toLowerCase() === 'claude.exe'
+  },
+  {
+    id: 'codex',
+    appName: 'Codex',
+    exePath: 'codex.exe',
+    match: (name) => {
+      const normalized = name.toLowerCase().trim();
+      return normalized === 'codex.exe' || normalized === 'codex' || normalized.includes('codex');
+    }
   }
 ];
 
-export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
+export const parseTasklistCsvOutput = (stdout: string): string[] =>
+  stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^"([^"]+)"/);
+      return match ? match[1] : null;
+    })
+    .filter((name): name is string => Boolean(name));
+
+export const mapProcessNamesToAITools = (processNames: string[]): Map<string, BackgroundProcess> => {
   const results = new Map<string, BackgroundProcess>();
 
   for (const rule of PROCESS_RULES) {
     results.set(rule.id, { name: rule.appName, running: false });
   }
+
+  for (const processName of processNames) {
+    for (const rule of PROCESS_RULES) {
+      if (rule.match(processName)) {
+        results.set(rule.id, { name: rule.appName, running: true });
+      }
+    }
+  }
+
+  return results;
+};
+
+export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
+  const results = mapProcessNamesToAITools([]);
 
   try {
     const { stdout } = await execAsync('tasklist /FO CSV /NH', {
@@ -38,20 +72,7 @@ export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundP
       timeout: 5000
     });
 
-    const lines = stdout.trim().split('\n');
-
-    for (const line of lines) {
-      const match = line.match(/^"([^"]+)"/);
-      if (!match) continue;
-
-      const processName = match[1];
-
-      for (const rule of PROCESS_RULES) {
-        if (rule.match(processName)) {
-          results.set(rule.id, { name: rule.appName, running: true });
-        }
-      }
-    }
+    return mapProcessNamesToAITools(parseTasklistCsvOutput(stdout));
   } catch {
     // Silently fail - process scanning is best-effort
   }

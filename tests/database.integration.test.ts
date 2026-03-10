@@ -71,6 +71,69 @@ describe('ArkWatchDatabase', () => {
     expect(topApps[1]).toMatchObject({ appName: 'Code', activeSeconds: 1800 });
   });
 
+  it('returns AI daily active seconds and launch counts', async () => {
+    await db.insertSession({
+      appName: 'Codex',
+      exePath: 'codex.exe',
+      startedAt: '2026-03-10T08:00:00.000Z',
+      endedAt: '2026-03-10T08:00:30.000Z',
+      durationSec: 30,
+      isIdleSegment: false,
+      source: 'background-process'
+    });
+
+    await db.insertSession({
+      appName: 'Codex',
+      exePath: 'codex.exe',
+      startedAt: '2026-03-10T08:00:30.000Z',
+      endedAt: '2026-03-10T08:01:00.000Z',
+      durationSec: 30,
+      isIdleSegment: false,
+      source: 'background-process'
+    });
+
+    await db.insertSession({
+      appName: 'Codex',
+      exePath: 'codex.exe',
+      startedAt: '2026-03-10T10:00:00.000Z',
+      endedAt: '2026-03-10T10:00:20.000Z',
+      durationSec: 20,
+      isIdleSegment: false,
+      source: 'background-process'
+    });
+
+    await db.insertSession({
+      appName: 'Claude Code',
+      exePath: 'claude.exe',
+      startedAt: '2026-03-10T09:00:00.000Z',
+      endedAt: '2026-03-10T09:02:00.000Z',
+      durationSec: 120,
+      isIdleSegment: false,
+      source: 'background-process'
+    });
+
+    await db.insertSession({
+      appName: 'Claude Code',
+      exePath: 'claude.exe',
+      startedAt: '2026-03-10T09:02:00.000Z',
+      endedAt: '2026-03-10T09:03:00.000Z',
+      durationSec: 60,
+      isIdleSegment: true,
+      source: 'background-process'
+    });
+
+    const aiStats = await db.getAIToolDailyStats({
+      from: '2026-03-10T00:00:00.000Z',
+      to: '2026-03-10T23:59:59.999Z'
+    });
+
+    const codex = aiStats.find((stat) => stat.id === 'codex');
+    const claude = aiStats.find((stat) => stat.id === 'claude');
+
+    expect(codex).toEqual({ id: 'codex', activeSeconds: 80, sessionCount: 2 });
+    expect(claude).toEqual({ id: 'claude', activeSeconds: 120, sessionCount: 1 });
+  });
+
   it('persists and validates settings', async () => {
     const updated = await db.updateSettings({
       idleThresholdSeconds: 420,

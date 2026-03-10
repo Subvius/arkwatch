@@ -11,7 +11,8 @@ const api: ArkWatchApi = {
   },
   stats: {
     getSummary: (range: DateRange) => ipcRenderer.invoke(IPC_CHANNELS.statsGetSummary, range),
-    getTopApps: (params: DateRange & { limit: number }) => ipcRenderer.invoke(IPC_CHANNELS.statsGetTopApps, params)
+    getTopApps: (params: DateRange & { limit: number }) => ipcRenderer.invoke(IPC_CHANNELS.statsGetTopApps, params),
+    getAIToolDailyStats: (range: DateRange) => ipcRenderer.invoke(IPC_CHANNELS.statsGetAIToolDailyStats, range)
   },
   settings: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
@@ -31,4 +32,3 @@ const api: ArkWatchApi = {
 };
 
 contextBridge.exposeInMainWorld('arkwatch', api);
-
