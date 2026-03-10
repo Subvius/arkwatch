@@ -24,8 +24,25 @@ export class ElectronActivitySource implements ActivitySource {
     };
   }
 
-  getIdleSeconds(): number {
-    return powerMonitor.getSystemIdleTime();
+  getIdleSeconds(idleThresholdSeconds = 300): number {
+    try {
+      const idleSeconds = powerMonitor.getSystemIdleTime();
+      if (Number.isFinite(idleSeconds) && idleSeconds >= 0) {
+        return idleSeconds;
+      }
+    } catch {
+      // Fallback below.
+    }
+
+    try {
+      const idleState = powerMonitor.getSystemIdleState(idleThresholdSeconds);
+      if (idleState === 'idle' || idleState === 'locked') {
+        return idleThresholdSeconds;
+      }
+    } catch {
+      // Best-effort fallback.
+    }
+
+    return 0;
   }
 }
-
