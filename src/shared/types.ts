@@ -17,6 +17,12 @@ export type TopAppStat = {
   activeSeconds: number;
 };
 
+export type AIToolDailyStat = {
+  id: 'claude' | 'codex';
+  activeSeconds: number;
+  sessionCount: number;
+};
+
 export type DailyStat = {
   date: string;
   activeSeconds: number;
@@ -61,6 +67,7 @@ export type ArkWatchApi = {
   stats: {
     getSummary: (range: DateRange) => Promise<SummaryStats>;
     getTopApps: (params: DateRange & { limit: number }) => Promise<TopAppStat[]>;
+    getAIToolDailyStats: (range: DateRange) => Promise<AIToolDailyStat[]>;
   };
   settings: {
     get: () => Promise<AppSettings>;
@@ -78,4 +85,3 @@ export type ArkWatchApi = {
     close: () => void;
   };
 };
-

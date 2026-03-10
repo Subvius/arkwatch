@@ -185,6 +185,10 @@ export const registerIpcHandlers = (
     return database.getTopApps(params, params.limit);
   });
 
+  ipcMain.handle(IPC_CHANNELS.statsGetAIToolDailyStats, (_event, range: DateRange) => {
+    return database.getAIToolDailyStats(range);
+  });
+
   ipcMain.handle(IPC_CHANNELS.settingsGet, () => {
     return database.getSettings();
   });
@@ -289,6 +293,3 @@ export const registerIpcHandlers = (
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 };
-
-
-

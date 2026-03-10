@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   trackerToggle: 'tracker.toggle',
   statsGetSummary: 'stats.getSummary',
   statsGetTopApps: 'stats.getTopApps',
+  statsGetAIToolDailyStats: 'stats.getAIToolDailyStats',
   settingsGet: 'settings.get',
   settingsUpdate: 'settings.update',
   processesGetAITools: 'processes.getAITools',

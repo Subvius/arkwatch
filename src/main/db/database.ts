@@ -2,11 +2,31 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { Database, open } from 'sqlite';
 import sqlite3 from 'sqlite3';
-import type { AppSettings, DateRange, SessionInput, SummaryStats, TopAppStat } from '../../shared/types';
+import type { AIToolDailyStat, AppSettings, DateRange, SessionInput, SummaryStats, TopAppStat } from '../../shared/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   idleThresholdSeconds: 300,
   launchAtLogin: true
+};
+
+type AIToolId = 'claude' | 'codex';
+
+const AI_TOOLS: Array<{ id: AIToolId; keyword: string }> = [
+  { id: 'claude', keyword: 'claude' },
+  { id: 'codex', keyword: 'codex' }
+];
+
+const resolveAIToolId = (appName: string, exePath: string | null): AIToolId | null => {
+  const normalizedName = appName.toLowerCase();
+  const normalizedPath = (exePath ?? '').toLowerCase();
+
+  for (const tool of AI_TOOLS) {
+    if (normalizedName.includes(tool.keyword) || normalizedPath.includes(tool.keyword)) {
+      return tool.id;
+    }
+  }
+
+  return null;
 };
 
 export class ArkWatchDatabase {
@@ -234,6 +254,77 @@ export class ArkWatchDatabase {
     return rows;
   }
 
+  async getAIToolDailyStats(range: DateRange): Promise<AIToolDailyStat[]> {
+    const db = this.requireDb();
+
+    const rows = await db.all<{
+      appName: string;
+      exePath: string | null;
+      startedAt: string;
+      endedAt: string;
+      durationSec: number;
+      isIdleSegment: number;
+      source: string;
+    }[]>(
+      `
+      SELECT
+        app_name AS appName,
+        exe_path AS exePath,
+        started_at AS startedAt,
+        ended_at AS endedAt,
+        duration_sec AS durationSec,
+        is_idle_segment AS isIdleSegment,
+        source
+      FROM sessions
+      WHERE started_at >= ?
+        AND started_at <= ?
+      ORDER BY started_at ASC
+      `,
+      range.from,
+      range.to
+    );
+
+    const stats: Record<AIToolId, AIToolDailyStat> = {
+      claude: { id: 'claude', activeSeconds: 0, sessionCount: 0 },
+      codex: { id: 'codex', activeSeconds: 0, sessionCount: 0 }
+    };
+
+    const lastBackgroundSegmentEndMs: Record<AIToolId, number | null> = {
+      claude: null,
+      codex: null
+    };
+
+    for (const row of rows) {
+      const toolId = resolveAIToolId(row.appName, row.exePath);
+      if (!toolId) {
+        continue;
+      }
+
+      if (row.isIdleSegment === 0) {
+        stats[toolId].activeSeconds += row.durationSec;
+      }
+
+      if (row.source !== 'background-process') {
+        continue;
+      }
+
+      const startedAtMs = Date.parse(row.startedAt);
+      if (!Number.isFinite(startedAtMs)) {
+        continue;
+      }
+
+      const previousSegmentEndMs = lastBackgroundSegmentEndMs[toolId];
+      if (previousSegmentEndMs === null || startedAtMs > previousSegmentEndMs + 1000) {
+        stats[toolId].sessionCount += 1;
+      }
+
+      const endedAtMs = Date.parse(row.endedAt);
+      lastBackgroundSegmentEndMs[toolId] = Number.isFinite(endedAtMs) ? endedAtMs : startedAtMs;
+    }
+
+    return AI_TOOLS.map((tool) => stats[tool.id]);
+  }
+
   private async ensureDefaultSettings(): Promise<void> {
     const db = this.requireDb();
     const now = new Date().toISOString();
@@ -265,4 +356,3 @@ export class ArkWatchDatabase {
     return this.db;
   }
 }
-
