@@ -187,16 +187,43 @@ export class ArkWatchDatabase {
       activeSeconds: number;
     }[]>(
       `
+      WITH filtered_sessions AS (
+        SELECT app_name, exe_path, duration_sec
+        FROM sessions
+        WHERE started_at >= ?
+          AND started_at <= ?
+          AND is_idle_segment = 0
+      ),
+      durations AS (
+        SELECT app_name AS appName, COALESCE(SUM(duration_sec), 0) AS activeSeconds
+        FROM filtered_sessions
+        GROUP BY app_name
+      ),
+      preferred_paths AS (
+        SELECT
+          app_name AS appName,
+          exe_path AS exePath,
+          ROW_NUMBER() OVER (
+            PARTITION BY app_name
+            ORDER BY
+              CASE
+                WHEN exe_path IS NULL OR TRIM(exe_path) = '' THEN 2
+                WHEN INSTR(exe_path, '\\') > 0 OR INSTR(exe_path, '/') > 0 THEN 0
+                ELSE 1
+              END ASC,
+              LENGTH(COALESCE(exe_path, '')) DESC
+          ) AS pathRank
+        FROM filtered_sessions
+      )
       SELECT
-        app_name AS appName,
-        MAX(exe_path) AS exePath,
-        COALESCE(SUM(duration_sec), 0) AS activeSeconds
-      FROM sessions
-      WHERE started_at >= ?
-        AND started_at <= ?
-        AND is_idle_segment = 0
-      GROUP BY app_name
-      ORDER BY activeSeconds DESC
+        d.appName,
+        p.exePath,
+        d.activeSeconds
+      FROM durations d
+      LEFT JOIN preferred_paths p
+        ON p.appName = d.appName
+        AND p.pathRank = 1
+      ORDER BY d.activeSeconds DESC
       LIMIT ?
       `,
       range.from,
@@ -238,3 +265,4 @@ export class ArkWatchDatabase {
     return this.db;
   }
 }
+

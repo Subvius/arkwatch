@@ -69,9 +69,13 @@ export type ArkWatchApi = {
   processes: {
     getAITools: () => Promise<AIToolProcess[]>;
   };
+  icons: {
+    getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
+  };
   window: {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
   };
 };
+
