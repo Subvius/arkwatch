@@ -166,6 +166,7 @@ export class ArkWatchDatabase {
         COALESCE(SUM(duration_sec), 0) AS totalTrackedSeconds
       FROM sessions
       WHERE started_at >= ? AND started_at <= ?
+        AND source != 'background-process'
       `,
       range.from,
       range.to
@@ -183,6 +184,7 @@ export class ArkWatchDatabase {
         COALESCE(SUM(CASE WHEN is_idle_segment = 1 THEN duration_sec ELSE 0 END), 0) AS idleSeconds
       FROM sessions
       WHERE started_at >= ? AND started_at <= ?
+        AND source != 'background-process'
       GROUP BY DATE(started_at, 'localtime')
       ORDER BY date ASC
       `,
@@ -213,6 +215,7 @@ export class ArkWatchDatabase {
         WHERE started_at >= ?
           AND started_at <= ?
           AND is_idle_segment = 0
+          AND source != 'background-process'
       ),
       durations AS (
         SELECT app_name AS appName, COALESCE(SUM(duration_sec), 0) AS activeSeconds
@@ -300,7 +303,8 @@ export class ArkWatchDatabase {
         continue;
       }
 
-      if (row.isIdleSegment === 0) {
+      // Only count foreground sessions for active time (not background-process)
+      if (row.isIdleSegment === 0 && row.source !== 'background-process') {
         stats[toolId].activeSeconds += row.durationSec;
       }
 

@@ -184,13 +184,19 @@ const bootstrap = async (): Promise<void> => {
   const settings = await database.getSettings();
   await applyAppSettings(settings);
 
-  tracker = new ActivityTrackerService(new ElectronActivitySource(), database, settings.idleThresholdSeconds, 1000);
-  await tracker.start();
-
   bgTracker = new BackgroundProcessTracker(async (session) => {
     await database!.insertSession(session);
   }, 10_000);
   bgTracker.start();
+
+  tracker = new ActivityTrackerService(
+    new ElectronActivitySource(),
+    database,
+    settings.idleThresholdSeconds,
+    1000,
+    () => bgTracker?.getRunningToolApp('claude') ?? null
+  );
+  await tracker.start();
 
   registerIpcHandlers(database, tracker, applyAppSettings, () => {
     refreshTrayMenu?.();

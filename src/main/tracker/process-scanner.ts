@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { SessionInput } from '../../shared/types';
+import type { ActiveApp } from './types';
 
 const execAsync = promisify(exec);
 
@@ -93,6 +94,13 @@ export class BackgroundProcessTracker {
     private readonly persistSession: (session: SessionInput) => Promise<void>,
     private readonly pollIntervalMs = 10_000
   ) {}
+
+  /** Returns the ActiveApp for a running AI tool, or null if not running. */
+  getRunningToolApp(toolId: string): ActiveApp | null {
+    const session = this.activeSessions.get(toolId);
+    if (!session) return null;
+    return { appName: session.rule.appName, exePath: session.rule.exePath };
+  }
 
   start(): void {
     this.intervalId = setInterval(() => {
