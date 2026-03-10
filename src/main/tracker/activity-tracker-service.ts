@@ -1,7 +1,33 @@
-import type { ActivitySource } from './types';
+import type { ActiveApp, ActivitySource } from './types';
 import type { TrackerStatus } from '../../shared/types';
 import { ActivityTrackerCore } from './activity-tracker-core';
 import { ArkWatchDatabase } from '../db/database';
+
+/** Lowercase exe basenames of common terminal emulators (Windows). */
+const TERMINAL_EXE_NAMES = new Set([
+  'windowsterminal.exe',
+  'cmd.exe',
+  'powershell.exe',
+  'pwsh.exe',
+  'mintty.exe',
+  'git-bash.exe',
+  'conemu64.exe',
+  'conemuc64.exe',
+  'hyper.exe',
+  'alacritty.exe',
+  'wezterm-gui.exe',
+  'wt.exe',
+  'bash.exe',
+  'wsl.exe'
+]);
+
+const isTerminalApp = (app: ActiveApp): boolean => {
+  if (!app.exePath) return false;
+  const basename = app.exePath.split(/[\\/]/).pop()?.toLowerCase() ?? '';
+  return TERMINAL_EXE_NAMES.has(basename);
+};
+
+export type ClaudeRunningProvider = () => ActiveApp | null;
 
 export class ActivityTrackerService {
   private intervalId: NodeJS.Timeout | null = null;
@@ -11,7 +37,8 @@ export class ActivityTrackerService {
     private readonly source: ActivitySource,
     private readonly database: ArkWatchDatabase,
     private idleThresholdSeconds: number,
-    private readonly pollIntervalMs = 1000
+    private readonly pollIntervalMs = 1000,
+    private readonly getClaudeApp?: ClaudeRunningProvider
   ) {
     this.core = new ActivityTrackerCore(this.idleThresholdSeconds, async (session) => {
       await this.database.insertSession(session);
@@ -80,8 +107,16 @@ export class ActivityTrackerService {
       Promise.resolve().then(() => this.source.getIdleSeconds(this.idleThresholdSeconds))
     ]);
 
-    const app = appResult.status === 'fulfilled' ? appResult.value : null;
+    let app = appResult.status === 'fulfilled' ? appResult.value : null;
     const idleSeconds = idleResult.status === 'fulfilled' ? idleResult.value : 0;
+
+    // When a terminal is focused and Claude Code is running, attribute time to Claude Code
+    if (app && this.getClaudeApp && isTerminalApp(app)) {
+      const claudeApp = this.getClaudeApp();
+      if (claudeApp) {
+        app = claudeApp;
+      }
+    }
 
     await this.core.tick(new Date(), app, idleSeconds);
   }

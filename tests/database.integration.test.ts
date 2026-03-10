@@ -72,6 +72,7 @@ describe('ArkWatchDatabase', () => {
   });
 
   it('returns AI daily active seconds and launch counts', async () => {
+    // Background-process sessions: used for session counting only, NOT active seconds
     await db.insertSession({
       appName: 'Codex',
       exePath: 'codex.exe',
@@ -102,6 +103,17 @@ describe('ArkWatchDatabase', () => {
       source: 'background-process'
     });
 
+    // Foreground sessions: these count toward active seconds
+    await db.insertSession({
+      appName: 'Codex',
+      exePath: 'codex.exe',
+      startedAt: '2026-03-10T08:00:00.000Z',
+      endedAt: '2026-03-10T08:01:20.000Z',
+      durationSec: 80,
+      isIdleSegment: false,
+      source: 'focus-change'
+    });
+
     await db.insertSession({
       appName: 'Claude Code',
       exePath: 'claude.exe',
@@ -120,6 +132,17 @@ describe('ArkWatchDatabase', () => {
       durationSec: 60,
       isIdleSegment: true,
       source: 'background-process'
+    });
+
+    // Claude foreground session (terminal rewritten to Claude Code)
+    await db.insertSession({
+      appName: 'Claude Code',
+      exePath: 'claude.exe',
+      startedAt: '2026-03-10T09:00:00.000Z',
+      endedAt: '2026-03-10T09:02:00.000Z',
+      durationSec: 120,
+      isIdleSegment: false,
+      source: 'focus-change'
     });
 
     const aiStats = await db.getAIToolDailyStats({

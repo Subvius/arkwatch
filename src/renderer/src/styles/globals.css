@@ -60,3 +60,13 @@ body {
 .main-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/* Skeleton pulse animation */
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.15; }
+}
