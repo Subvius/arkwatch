@@ -8,7 +8,7 @@ files:
   - package.json
 asar: true
 win:
-  icon: build/icon.ico
+  icon: build/logo.ico
   target:
     - nsis
   artifactName: ArkWatch-${version}-setup.${ext}

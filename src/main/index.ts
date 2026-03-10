@@ -17,13 +17,13 @@ let isQuiting = false;
 let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
 
-const getDevIconPath = (): string | null => {
-  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico');
+const getAppIconPath = (): string | null => {
+  const iconPath = path.join(app.getAppPath(), 'build', 'logo.ico');
   return existsSync(iconPath) ? iconPath : null;
 };
 
 const createWindow = (): BrowserWindow => {
-  const devIconPath = getDevIconPath();
+  const appIconPath = getAppIconPath();
 
   const window = new BrowserWindow({
     width: 1280,
@@ -33,7 +33,7 @@ const createWindow = (): BrowserWindow => {
     show: false,
     frame: false,
     title: 'ArkWatch',
-    ...(devIconPath ? { icon: devIconPath } : {}),
+    ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -70,12 +70,16 @@ const applyAppSettings = async (settings: AppSettings): Promise<void> => {
 };
 
 const createTray = (): { tray: Tray; refresh: () => void } => {
-  const devIconPath = getDevIconPath();
-  const trayIcon = devIconPath
-    ? nativeImage.createFromPath(devIconPath)
-    : nativeImage.createFromDataURL(
-        'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIGZpbGw9IiMwQzBBMDkiIHN0cm9rZT0iI0Y0RjFERSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTQgMTBINnYySDR6bTQgLTNoMnY1SDh6bTQgLTRoMnY5aC0yeiIgZmlsbD0iI0Y0RjFERSIvPjwvc3ZnPg=='
-      );
+  const appIconPath = getAppIconPath();
+  const trayIconFromAppPath = appIconPath ? nativeImage.createFromPath(appIconPath) : nativeImage.createEmpty();
+  const trayIconFromExecutable = nativeImage.createFromPath(process.execPath);
+  const trayIcon = !trayIconFromAppPath.isEmpty()
+    ? trayIconFromAppPath
+    : !trayIconFromExecutable.isEmpty()
+      ? trayIconFromExecutable
+      : nativeImage.createFromDataURL(
+          'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIGZpbGw9IiMwQzBBMDkiIHN0cm9rZT0iI0Y0RjFERSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTQgMTBINnYySDR6bTQgLTNoMnY1SDh6bTQgLTRoMnY5aC0yeiIgZmlsbD0iI0Y0RjFERSIvPjwvc3ZnPg=='
+        );
 
   const newTray = new Tray(trayIcon);
   newTray.setToolTip('ArkWatch');
