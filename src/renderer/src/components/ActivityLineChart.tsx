@@ -56,8 +56,8 @@ export const ActivityLineChart = ({ apps }: ActivityLineChartProps): React.JSX.E
             />
             <RechartsTooltip
               contentStyle={tooltipStyle}
-              formatter={(_value: number, _name: string, props: { payload: { rawSeconds: number } }) => [
-                formatDuration(props.payload.rawSeconds),
+              formatter={(_value: number, _name: string, props: { payload?: { rawSeconds?: number } }) => [
+                props.payload?.rawSeconds != null ? formatDuration(props.payload.rawSeconds) : `${_value}m`,
                 'Active'
               ]}
               cursor={{ stroke: '#d1d5db', strokeDasharray: '3 3' }}
