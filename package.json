@@ -1,0 +1,64 @@
+{
+  "name": "arkwatch",
+  "version": "0.1.0",
+  "description": "Windows 11 screen-time tracker with local SQLite storage",
+  "main": "out/main/index.js",
+  "type": "module",
+  "author": "",
+  "license": "MIT",
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@fontsource/merriweather": "^5.2.11",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "active-win": "^9.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.511.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^2.15.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.18",
+    "@types/lodash": "^4.17.24",
+    "@types/node": "^24.12.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "autoprefixer": "^10.4.27",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "electron-vite": "latest",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "vite": "latest",
+    "vitest": "latest"
+  },
+  "trustedDependencies": [
+    "active-win",
+    "@swc/core",
+    "electron",
+    "sqlite3",
+    "esbuild",
+    "electron-winstaller"
+  ],
+  "overrides": {
+    "@tootallnate/once": "^3.0.1",
+    "tar": "^7.5.4"
+  }
+}

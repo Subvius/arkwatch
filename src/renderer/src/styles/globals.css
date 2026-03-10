@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 45 86% 94%;
+  --panel: 39 100% 97%;
+  --ink: 220 9% 9%;
+  --muted: 38 37% 82%;
+  --accent: 12 86% 57%;
+  --accent-ink: 30 100% 98%;
+  --line: 220 9% 9%;
+}
+
+* {
+  @apply border-[hsl(var(--line))];
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 185, 117, 0.3), transparent 34%),
+    radial-gradient(circle at 88% 80%, rgba(255, 107, 68, 0.22), transparent 28%),
+    hsl(var(--bg));
+  color: hsl(var(--ink));
+  font-family: 'Merriweather', Georgia, serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.neo-panel {
+  border: 3px solid hsl(var(--line));
+  border-radius: 2px;
+  box-shadow: 8px 8px 0 0 hsl(var(--ink));
+  background: hsl(var(--panel));
+}
+
+.neo-chip {
+  border: 3px solid hsl(var(--line));
+  box-shadow: 4px 4px 0 0 hsl(var(--ink));
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-ink));
+  padding: 0.25rem 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
