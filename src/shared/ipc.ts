@@ -6,5 +6,9 @@ export const IPC_CHANNELS = {
   statsGetSummary: 'stats.getSummary',
   statsGetTopApps: 'stats.getTopApps',
   settingsGet: 'settings.get',
-  settingsUpdate: 'settings.update'
+  settingsUpdate: 'settings.update',
+  processesGetAITools: 'processes.getAITools',
+  windowMinimize: 'window.minimize',
+  windowMaximize: 'window.maximize',
+  windowClose: 'window.close'
 } as const;

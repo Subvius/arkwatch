@@ -23,7 +23,8 @@ export class ActivityTrackerCore {
 
   constructor(
     private idleThresholdSeconds: number,
-    private readonly persistSession: PersistSession
+    private readonly persistSession: PersistSession,
+    private readonly checkpointSeconds = 15
   ) {}
 
   setIdleThreshold(seconds: number): void {
@@ -82,6 +83,17 @@ export class ActivityTrackerCore {
 
     if (this.segment.isIdle !== nextIdle || !this.isSameApp(this.segment.app, nextApp)) {
       await this.flush(at, 'focus-change');
+      this.segment = {
+        app: nextApp,
+        startedAt: at,
+        isIdle: nextIdle
+      };
+      return;
+    }
+
+    const segmentAgeSeconds = Math.floor((at.getTime() - this.segment.startedAt.getTime()) / 1000);
+    if (segmentAgeSeconds >= this.checkpointSeconds) {
+      await this.flush(at, 'heartbeat');
       this.segment = {
         app: nextApp,
         startedAt: at,

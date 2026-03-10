@@ -1,30 +1,41 @@
 import path from 'node:path';
-import { promises as fs } from 'node:fs';
+import { promises as fs, existsSync } from 'node:fs';
 import { app, BrowserWindow, Menu, Tray, nativeImage } from 'electron';
 import { ArkWatchDatabase } from './db/database';
 import { registerIpcHandlers } from './ipc';
 import { ElectronActivitySource } from './tracker/electron-activity-source';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
+import { BackgroundProcessTracker } from './tracker/process-scanner';
 import type { AppSettings } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let database: ArkWatchDatabase | null = null;
 let tracker: ActivityTrackerService | null = null;
+let bgTracker: BackgroundProcessTracker | null = null;
 let isQuiting = false;
 let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
 
+const getDevIconPath = (): string | null => {
+  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico');
+  return existsSync(iconPath) ? iconPath : null;
+};
+
 const createWindow = (): BrowserWindow => {
+  const devIconPath = getDevIconPath();
+
   const window = new BrowserWindow({
     width: 1280,
     height: 860,
     minWidth: 960,
     minHeight: 640,
     show: false,
+    frame: false,
     title: 'ArkWatch',
+    ...(devIconPath ? { icon: devIconPath } : {}),
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -59,9 +70,12 @@ const applyAppSettings = async (settings: AppSettings): Promise<void> => {
 };
 
 const createTray = (): { tray: Tray; refresh: () => void } => {
-  const trayIcon = nativeImage.createFromDataURL(
-    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIGZpbGw9IiMwQzBBMDkiIHN0cm9rZT0iI0Y0RjFERSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTQgMTBINnYySDR6bTQgLTNoMnY1SDh6bTQgLTRoMnY5aC0yeiIgZmlsbD0iI0Y0RjFERSIvPjwvc3ZnPg=='
-  );
+  const devIconPath = getDevIconPath();
+  const trayIcon = devIconPath
+    ? nativeImage.createFromPath(devIconPath)
+    : nativeImage.createFromDataURL(
+        'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIGZpbGw9IiMwQzBBMDkiIHN0cm9rZT0iI0Y0RjFERSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTQgMTBINnYySDR6bTQgLTNoMnY1SDh6bTQgLTRoMnY5aC0yeiIgZmlsbD0iI0Y0RjFERSIvPjwvc3ZnPg=='
+      );
 
   const newTray = new Tray(trayIcon);
   newTray.setToolTip('ArkWatch');
@@ -125,6 +139,11 @@ const createTray = (): { tray: Tray; refresh: () => void } => {
 };
 
 const shutdown = async (): Promise<void> => {
+  if (bgTracker) {
+    await bgTracker.stop();
+    bgTracker = null;
+  }
+
   if (tracker) {
     await tracker.stop();
     tracker = null;
@@ -163,6 +182,11 @@ const bootstrap = async (): Promise<void> => {
 
   tracker = new ActivityTrackerService(new ElectronActivitySource(), database, settings.idleThresholdSeconds, 1000);
   await tracker.start();
+
+  bgTracker = new BackgroundProcessTracker(async (session) => {
+    await database!.insertSession(session);
+  }, 10_000);
+  bgTracker.start();
 
   registerIpcHandlers(database, tracker, applyAppSettings, () => {
     refreshTrayMenu?.();

@@ -3,18 +3,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@renderer/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap border-4 border-[hsl(var(--line))] text-sm font-bold transition-all duration-150 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 active:translate-x-1 active:translate-y-1',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-ink))] shadow-[6px_6px_0_0_hsl(var(--ink))] hover:brightness-95',
-        ghost: 'bg-transparent text-[hsl(var(--ink))] shadow-[6px_6px_0_0_hsl(var(--ink))] hover:bg-[hsl(var(--muted))]',
-        destructive: 'bg-[#b91c1c] text-white shadow-[6px_6px_0_0_hsl(var(--ink))] hover:brightness-110'
+        default: 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-ink))] hover:bg-[hsl(var(--accent))]/90',
+        ghost: 'hover:bg-[hsl(var(--border))]',
+        destructive: 'bg-red-600 text-white hover:bg-red-700'
       },
       size: {
-        default: 'h-11 px-5 py-2',
-        sm: 'h-9 px-3',
-        lg: 'h-12 px-8'
+        default: 'h-9 px-4 py-2',
+        sm: 'h-8 px-3 text-xs',
+        lg: 'h-10 px-6',
+        icon: 'h-8 w-8'
       }
     },
     defaultVariants: {

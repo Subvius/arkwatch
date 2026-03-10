@@ -16,6 +16,14 @@ const api: ArkWatchApi = {
   settings: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
     update: (settings: Partial<AppSettings>) => ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, settings)
+  },
+  processes: {
+    getAITools: () => ipcRenderer.invoke(IPC_CHANNELS.processesGetAITools)
+  },
+  window: {
+    minimize: () => ipcRenderer.send(IPC_CHANNELS.windowMinimize),
+    maximize: () => ipcRenderer.send(IPC_CHANNELS.windowMaximize),
+    close: () => ipcRenderer.send(IPC_CHANNELS.windowClose)
   }
 };
 

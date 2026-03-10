@@ -9,7 +9,7 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <thead ref={ref} className={cn('border-b-4 border-[hsl(var(--line))]', className)} {...props} />
+  ({ className, ...props }, ref) => <thead ref={ref} className={cn('border-b', className)} {...props} />
 );
 TableHeader.displayName = 'TableHeader';
 
@@ -19,12 +19,12 @@ const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes
 TableBody.displayName = 'TableBody';
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(({ className, ...props }, ref) => (
-  <tr ref={ref} className={cn('border-b-2 border-[hsl(var(--line))] hover:bg-[hsl(var(--muted))]/50', className)} {...props} />
+  <tr ref={ref} className={cn('border-b transition-colors hover:bg-gray-50', className)} {...props} />
 ));
 TableRow.displayName = 'TableRow';
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <th ref={ref} className={cn('h-11 px-3 text-left align-middle text-xs font-bold uppercase tracking-wider', className)} {...props} />
+  <th ref={ref} className={cn('h-10 px-3 text-left align-middle text-xs font-medium text-[hsl(var(--muted))]', className)} {...props} />
 ));
 TableHead.displayName = 'TableHead';
 

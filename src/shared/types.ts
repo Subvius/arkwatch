@@ -45,6 +45,12 @@ export type SessionInput = {
   source: string;
 };
 
+export type AIToolProcess = {
+  id: string;
+  name: string;
+  running: boolean;
+};
+
 export type ArkWatchApi = {
   tracker: {
     getStatus: () => Promise<TrackerStatus>;
@@ -59,5 +65,13 @@ export type ArkWatchApi = {
   settings: {
     get: () => Promise<AppSettings>;
     update: (settings: Partial<AppSettings>) => Promise<AppSettings>;
+  };
+  processes: {
+    getAITools: () => Promise<AIToolProcess[]>;
+  };
+  window: {
+    minimize: () => void;
+    maximize: () => void;
+    close: () => void;
   };
 };
