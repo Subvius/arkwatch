@@ -15,6 +15,7 @@ import { WeeklyChart } from './components/WeeklyChart';
 import { RadialChart } from './components/RadialChart';
 import { ActivityLineChart } from './components/ActivityLineChart';
 import { TopAppsTable } from './components/TopAppsTable';
+import { DashboardSkeleton } from './components/DashboardSkeleton';
 
 const emptySummary: SummaryStats = {
   totalActiveSeconds: 0,
@@ -72,6 +73,7 @@ export const App = (): React.JSX.Element => {
   const [draftIdle, setDraftIdle] = React.useState('300');
   const [draftLaunchAtLogin, setDraftLaunchAtLogin] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [dataLoaded, setDataLoaded] = React.useState(false);
 
   const loadStatus = React.useCallback(async () => {
     const next = await window.arkwatch.tracker.getStatus();
@@ -117,7 +119,9 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   React.useEffect(() => {
-    void Promise.all([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings()]);
+    void Promise.all([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings()]).then(() => {
+      setDataLoaded(true);
+    });
 
     const statusTimer = window.setInterval(() => {
       void loadStatus();
@@ -177,6 +181,9 @@ export const App = (): React.JSX.Element => {
         <TitleBar />
 
         <main className="main-scroll flex-1 p-6">
+          {!dataLoaded ? (
+            <DashboardSkeleton />
+          ) : (
           <div className="mx-auto flex max-w-5xl flex-col gap-5">
             {/* Status Row */}
             <div className="flex items-center justify-between">
@@ -325,6 +332,7 @@ export const App = (): React.JSX.Element => {
               </div>
             </section>
           </div>
+          )}
         </main>
       </div>
     </TooltipProvider>
