@@ -83,5 +83,6 @@ export type ArkWatchApi = {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+    onRestoredFromTray: (callback: () => void) => () => void;
   };
 };

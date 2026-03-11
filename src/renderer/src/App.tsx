@@ -16,6 +16,9 @@ import { RadialChart } from './components/RadialChart';
 import { ActivityLineChart } from './components/ActivityLineChart';
 import { TopAppsTable } from './components/TopAppsTable';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
+import { MascotHeader } from './components/MascotHeader';
+import { isBrowserApp } from './lib/browser-detection';
+import type { ElephantMascotHandle, IdleMode } from './components/ElephantMascot';
 
 const emptySummary: SummaryStats = {
   totalActiveSeconds: 0,
@@ -74,10 +77,22 @@ export const App = (): React.JSX.Element => {
   const [draftLaunchAtLogin, setDraftLaunchAtLogin] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [dataLoaded, setDataLoaded] = React.useState(false);
+  const [idleMode, setIdleMode] = React.useState<IdleMode>('none');
+  const [scheduledIdle, setScheduledIdle] = React.useState(false);
+  const [isMedicMode, setIsMedicMode] = React.useState(false);
+  const medicTimerRef = React.useRef<number | null>(null);
+  const lastIdleStateRef = React.useRef(false);
+  const elephantRef = React.useRef<ElephantMascotHandle>(null);
+  const prevAppRef = React.useRef<string | null>(null);
 
   const loadStatus = React.useCallback(async () => {
     const next = await window.arkwatch.tracker.getStatus();
-    setStatus(next);
+    setStatus((prev) => {
+      if (prev.currentApp !== next.currentApp && prev.currentApp !== null) {
+        prevAppRef.current = prev.currentApp;
+      }
+      return next;
+    });
   }, []);
 
   const loadData = React.useCallback(async () => {
@@ -173,6 +188,104 @@ export const App = (): React.JSX.Element => {
   const isClaudeRunning = aiProcesses.find((p) => p.id === 'claude')?.running ?? false;
   const isCodexRunning = aiProcesses.find((p) => p.id === 'codex')?.running ?? false;
 
+  const headwear = React.useMemo((): 'none' | 'helmet' | 'nightcap' | 'medic' => {
+    if (isClaudeRunning || isCodexRunning) return isMedicMode ? 'medic' : 'helmet';
+    const hour = new Date().getHours();
+    if (hour >= 23 || hour < 6) return 'nightcap';
+    return 'none';
+  }, [isClaudeRunning, isCodexRunning, isMedicMode]);
+
+  const shouldSurf = React.useMemo((): boolean => {
+    const app = status.currentApp;
+    if (isBrowserApp(app)) return true;
+    const isOurApp = app === 'ArkWatch' || app === 'Electron' || app === null;
+    if (isOurApp) return isBrowserApp(prevAppRef.current);
+    return false;
+  }, [status.currentApp]);
+
+  React.useEffect(() => {
+    return window.arkwatch.window.onRestoredFromTray(() => {
+      elephantRef.current?.triggerGreeting();
+    });
+  }, []);
+
+  // Schedule checking (every 10s)
+  React.useEffect(() => {
+    const SCHEDULE: { start: [number, number]; end: [number, number]; mode: IdleMode }[] = [
+      { start: [9, 0],   end: [9, 5],   mode: 'salad' },
+      { start: [10, 15], end: [10, 20], mode: 'workout' },
+      { start: [12, 0],  end: [12, 5],  mode: 'salad' },
+      { start: [14, 50], end: [15, 0],  mode: 'sleep' },
+      { start: [17, 50], end: [18, 0],  mode: 'workout' },
+      { start: [20, 0],  end: [20, 5],  mode: 'salad' },
+      { start: [23, 30], end: [6, 0],   mode: 'sleep' },
+    ];
+
+    function getScheduledIdle(now: Date): IdleMode {
+      const t = now.getHours() * 60 + now.getMinutes();
+      for (const { start, end, mode } of SCHEDULE) {
+        const s = start[0] * 60 + start[1];
+        const e = end[0] * 60 + end[1];
+        if (e > s ? (t >= s && t < e) : (t >= s || t < e)) return mode;
+      }
+      return 'none';
+    }
+
+    const check = (): void => {
+      const scheduled = getScheduledIdle(new Date());
+      if (scheduled !== 'none') {
+        setScheduledIdle(true);
+        setIdleMode(scheduled);
+        if (medicTimerRef.current) {
+          clearInterval(medicTimerRef.current);
+          medicTimerRef.current = null;
+          setIsMedicMode(false);
+        }
+      } else {
+        setScheduledIdle((prev) => {
+          if (prev) setIdleMode('none');
+          return false;
+        });
+      }
+    };
+    check();
+    const timer = window.setInterval(check, 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // App idle → random idle animation
+  React.useEffect(() => {
+    if (scheduledIdle) return;
+    if (status.idle && !lastIdleStateRef.current) {
+      const types: IdleMode[] = ['salad', 'sleep', 'workout'];
+      setIdleMode(types[Math.floor(Math.random() * types.length)]);
+    } else if (!status.idle && lastIdleStateRef.current) {
+      setIdleMode('none');
+    }
+    lastIdleStateRef.current = status.idle;
+  }, [status.idle, scheduledIdle]);
+
+  // Medic mode (25% chance when AI running, re-rolls every 15 min)
+  React.useEffect(() => {
+    if (!(isClaudeRunning || isCodexRunning)) {
+      setIsMedicMode(false);
+      if (medicTimerRef.current) {
+        clearInterval(medicTimerRef.current);
+        medicTimerRef.current = null;
+      }
+      return;
+    }
+    const roll = (): void => setIsMedicMode(Math.random() < 0.25);
+    roll();
+    medicTimerRef.current = window.setInterval(roll, 15 * 60 * 1000);
+    return () => {
+      if (medicTimerRef.current) {
+        clearInterval(medicTimerRef.current);
+        medicTimerRef.current = null;
+      }
+    };
+  }, [isClaudeRunning, isCodexRunning]);
+
   const dailyGoalSeconds = 8 * 3600;
 
   return (
@@ -185,6 +298,7 @@ export const App = (): React.JSX.Element => {
             <DashboardSkeleton />
           ) : (
           <div className="mx-auto flex max-w-5xl flex-col gap-5">
+            <MascotHeader headwear={headwear} surfing={shouldSurf} idleMode={idleMode} scheduledIdle={scheduledIdle} elephantRef={elephantRef} />
             {/* Status Row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">

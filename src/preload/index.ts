@@ -27,7 +27,12 @@ const api: ArkWatchApi = {
   window: {
     minimize: () => ipcRenderer.send(IPC_CHANNELS.windowMinimize),
     maximize: () => ipcRenderer.send(IPC_CHANNELS.windowMaximize),
-    close: () => ipcRenderer.send(IPC_CHANNELS.windowClose)
+    close: () => ipcRenderer.send(IPC_CHANNELS.windowClose),
+    onRestoredFromTray: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.windowRestoredFromTray, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.windowRestoredFromTray, handler); };
+    }
   }
 };
 
