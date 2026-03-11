@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fs, existsSync } from 'node:fs';
 import { app, BrowserWindow, Menu, Tray, nativeImage } from 'electron';
+import { IPC_CHANNELS } from '../shared/ipc';
 import { ArkWatchDatabase } from './db/database';
 import { registerIpcHandlers } from './ipc';
 import { ElectronActivitySource } from './tracker/electron-activity-source';
@@ -14,6 +15,7 @@ let database: ArkWatchDatabase | null = null;
 let tracker: ActivityTrackerService | null = null;
 let bgTracker: BackgroundProcessTracker | null = null;
 let isQuiting = false;
+let isHiddenToTray = false;
 let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
 
@@ -50,6 +52,7 @@ const createWindow = (): BrowserWindow => {
     if (!isQuiting) {
       event.preventDefault();
       window.hide();
+      isHiddenToTray = true;
     }
   });
 
@@ -98,6 +101,10 @@ const createTray = (): { tray: Tray; refresh: () => void } => {
 
           mainWindow.show();
           mainWindow.focus();
+          if (isHiddenToTray) {
+            mainWindow.webContents.send(IPC_CHANNELS.windowRestoredFromTray);
+            isHiddenToTray = false;
+          }
         }
       },
       {
@@ -137,6 +144,10 @@ const createTray = (): { tray: Tray; refresh: () => void } => {
 
     mainWindow.show();
     mainWindow.focus();
+    if (isHiddenToTray) {
+      mainWindow.webContents.send(IPC_CHANNELS.windowRestoredFromTray);
+      isHiddenToTray = false;
+    }
   });
 
   return { tray: newTray, refresh };
@@ -216,6 +227,10 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
+      if (isHiddenToTray) {
+        mainWindow.webContents.send(IPC_CHANNELS.windowRestoredFromTray);
+        isHiddenToTray = false;
+      }
     }
   });
 

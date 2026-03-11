@@ -12,5 +12,6 @@ export const IPC_CHANNELS = {
   iconsGetAppIcon: 'icons.getAppIcon',
   windowMinimize: 'window.minimize',
   windowMaximize: 'window.maximize',
-  windowClose: 'window.close'
+  windowClose: 'window.close',
+  windowRestoredFromTray: 'window.restoredFromTray'
 } as const;
