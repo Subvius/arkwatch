@@ -349,6 +349,8 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
   const isSurfingRef = React.useRef(false);
   const isIdleRef = React.useRef(false);
   const currentIdleModeRef = React.useRef<IdleMode>('none');
+  const appFocusedRef = React.useRef(appFocused);
+  appFocusedRef.current = appFocused;
 
   const trunkControls = useAnimation();
   const glassesControls = useAnimation();
@@ -382,6 +384,21 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
       trunkControls.start({ rotate: [0, -15], transition: wobble });
     }
   }, [bodyControls, trunkControls]);
+
+  // Stop/resume surfing wobble on focus change
+  React.useEffect(() => {
+    if (!isSurfing) return;
+    if (!appFocused) {
+      bodyControls.stop();
+      trunkControls.stop();
+      boardControls.stop();
+    } else {
+      const wobble = { repeat: Infinity, repeatType: 'mirror' as const, duration: 1.5, ease: 'easeInOut' as const };
+      bodyControls.start({ y: [-2, 2], rotate: [-4, 4], transition: wobble });
+      trunkControls.start({ rotate: [0, -15], transition: wobble });
+      boardControls.start({ y: [-2, 2], rotate: [-4, 4], transition: wobble });
+    }
+  }, [appFocused, isSurfing, bodyControls, trunkControls, boardControls]);
 
   // --- IDLE HELPER FUNCTIONS ---
 
@@ -433,6 +450,11 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
   const waitInterruptible = React.useCallback(async (ms: number): Promise<boolean> => {
     const steps = ms / 100;
     for (let i = 0; i < steps; i++) {
+      if (!isIdleRef.current) return false;
+      // Suspend while app is unfocused — keep waiting without advancing
+      while (!appFocusedRef.current && isIdleRef.current) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
       if (!isIdleRef.current) return false;
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -965,9 +987,9 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
     return () => window.clearTimeout(initialTimer);
   }, [triggerGreeting]);
 
-  // Stethoscope "Listening" Pulse Loop
+  // Stethoscope "Listening" Pulse Loop (paused when app unfocused)
   React.useEffect(() => {
-    if (isWearingMedic && !isAnimating.current && !isIdleRef.current) {
+    if (isWearingMedic && !isAnimating.current && !isIdleRef.current && appFocused) {
       const pulseTransition = { repeat: Infinity, repeatType: 'mirror' as const, duration: 0.6, ease: 'easeInOut' as const };
       const inspectSequence = [0, -12, -12, 0, 0, 12, 12, 0];
       const inspectTimes = [0, 0.1, 0.3, 0.4, 0.6, 0.7, 0.9, 1];
@@ -992,8 +1014,11 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
           scale: pulseTransition,
         },
       });
+    } else if (isWearingMedic && !appFocused) {
+      trunkControls.stop();
+      stethControls.stop();
     }
-  }, [isWearingMedic, trunkControls, stethControls]);
+  }, [isWearingMedic, appFocused, trunkControls, stethControls]);
 
   // --- CONSOLIDATED POLLING SYNC (paused when app unfocused) ---
   React.useEffect(() => {
