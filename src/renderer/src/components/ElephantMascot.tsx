@@ -400,6 +400,16 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
     }
   }, [appFocused, isSurfing, bodyControls, trunkControls, boardControls]);
 
+  // Stop sleep body/peek animations on unfocus, reset peek eye to closed
+  React.useEffect(() => {
+    if (!isIdleRef.current || currentIdleModeRef.current !== 'sleep') return;
+    if (!appFocused) {
+      bodyControls.stop();
+      bodyControls.start({ rotate: 0, transition: { duration: 0.3 } });
+      setSleepEyeState('closed');
+    }
+  }, [appFocused, bodyControls]);
+
   // --- IDLE HELPER FUNCTIONS ---
 
   const clearEquipmentsForIdle = React.useCallback(async (allowedEquipment?: string | null): Promise<void> => {
@@ -1018,6 +1028,11 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
       trunkControls.stop();
       stethControls.stop();
     }
+
+    return () => {
+      trunkControls.stop();
+      stethControls.stop();
+    };
   }, [isWearingMedic, appFocused, trunkControls, stethControls]);
 
   // --- CONSOLIDATED POLLING SYNC (paused when app unfocused) ---

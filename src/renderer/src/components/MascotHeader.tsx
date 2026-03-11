@@ -3,11 +3,10 @@ import { format } from 'date-fns';
 import { ElephantMascot } from './ElephantMascot';
 import type { ElephantMascotHandle, ElephantMascotProps } from './ElephantMascot';
 
-function getGreeting(): string {
+function computeGreetingAndDate(): { greeting: string; dateStr: string } {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return { greeting, dateStr: format(new Date(), 'EEEE, MMMM d') };
 }
 
 type MascotHeaderProps = ElephantMascotProps & {
@@ -15,8 +14,14 @@ type MascotHeaderProps = ElephantMascotProps & {
 };
 
 export const MascotHeader = ({ headwear, surfing, idleMode, scheduledIdle, appFocused, elephantRef }: MascotHeaderProps): React.JSX.Element => {
-  const greeting = React.useMemo(() => getGreeting(), []);
-  const dateStr = React.useMemo(() => format(new Date(), 'EEEE, MMMM d'), []);
+  const [{ greeting, dateStr }, setGreetingData] = React.useState(computeGreetingAndDate);
+
+  React.useEffect(() => {
+    const interval = window.setInterval(() => {
+      setGreetingData(computeGreetingAndDate());
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   return (
     <div className="flex items-center justify-between py-1">

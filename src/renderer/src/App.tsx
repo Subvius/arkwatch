@@ -3,7 +3,7 @@ import { endOfDay, format, startOfDay, subDays } from 'date-fns';
 import { PauseCircle, PlayCircle, Settings2 } from 'lucide-react';
 import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus } from '../../shared/types';
 import { formatDuration } from './lib/utils';
-import { AI_TOOLS, type AIToolId } from './lib/ai-tools';
+import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { Input } from './components/ui/input';
@@ -85,8 +85,20 @@ export const App = (): React.JSX.Element => {
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
   const prevAppRef = React.useRef<string | null>(null);
 
+  // Track dark mode for theme-dependent configs
+  const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
+  React.useEffect(() => {
+    const update = (): void => setIsDark(document.documentElement.classList.contains('dark'));
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const aiToolConfigs = React.useMemo(() => getAITools(isDark), [isDark]);
+
   // Track window focus for pausing mascot animations when app is in background
-  const [appFocused, setAppFocused] = React.useState(document.hasFocus());
+  // Default to true — Electron window is focused on launch even if document.hasFocus() briefly returns false
+  const [appFocused, setAppFocused] = React.useState(true);
   React.useEffect(() => {
     const onFocus = (): void => setAppFocused(true);
     const onBlur = (): void => setAppFocused(false);
@@ -391,13 +403,13 @@ export const App = (): React.JSX.Element => {
               <h2 className="mb-2 text-xs font-medium text-[hsl(var(--muted))]">AI Tools</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 <AIToolCard
-                  config={AI_TOOLS.claude}
+                  config={aiToolConfigs.claude}
                   activeSeconds={aiStats.claude.activeSeconds}
                   sessionCount={aiStats.claude.sessionCount}
                   isRunning={isClaudeRunning}
                 />
                 <AIToolCard
-                  config={AI_TOOLS.codex}
+                  config={aiToolConfigs.codex}
                   activeSeconds={aiStats.codex.activeSeconds}
                   sessionCount={aiStats.codex.sessionCount}
                   isRunning={isCodexRunning}
@@ -430,7 +442,7 @@ export const App = (): React.JSX.Element => {
                 />
               </div>
 
-              <div className="flex items-center justify-center rounded-lg border bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-center rounded-lg border bg-[hsl(var(--panel))] p-5 shadow-sm">
                 <RadialChart
                   activeSeconds={todaySummary.totalActiveSeconds}
                   idleSeconds={todaySummary.totalIdleSeconds}
@@ -441,12 +453,12 @@ export const App = (): React.JSX.Element => {
 
             {/* Charts row: bar + area */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-lg border bg-white p-5 shadow-sm">
+              <div className="rounded-lg border bg-[hsl(var(--panel))] p-5 shadow-sm">
                 <p className="mb-3 text-xs font-medium text-[hsl(var(--muted))]">Weekly Activity</p>
                 <WeeklyChart data={chartData} />
               </div>
 
-              <div className="rounded-lg border bg-white p-5 shadow-sm">
+              <div className="rounded-lg border bg-[hsl(var(--panel))] p-5 shadow-sm">
                 <p className="mb-3 text-xs font-medium text-[hsl(var(--muted))]">Top Apps by Usage</p>
                 <ActivityLineChart apps={topApps} />
               </div>
@@ -455,7 +467,7 @@ export const App = (): React.JSX.Element => {
             {/* Top Apps */}
             <section>
               <h2 className="mb-2 text-xs font-medium text-[hsl(var(--muted))]">Top Apps (7 days)</h2>
-              <div className="rounded-lg border bg-white shadow-sm">
+              <div className="rounded-lg border bg-[hsl(var(--panel))] shadow-sm">
                 <TopAppsTable apps={topApps} />
               </div>
             </section>

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { formatDuration } from '../lib/utils';
+import { useChartTheme } from '../lib/use-chart-theme';
 
 type RadialChartProps = {
   activeSeconds: number;
@@ -9,12 +10,13 @@ type RadialChartProps = {
 };
 
 export const RadialChart = ({ activeSeconds, idleSeconds, goalSeconds }: RadialChartProps): React.JSX.Element => {
+  const ct = useChartTheme();
   const activePct = Math.min((activeSeconds / Math.max(goalSeconds, 1)) * 100, 100);
   const idlePct = Math.min((idleSeconds / Math.max(goalSeconds, 1)) * 100, 100);
 
   const data = [
-    { name: 'Idle', value: idlePct, fill: '#e0e7ff' },
-    { name: 'Active', value: activePct, fill: '#6366f1' }
+    { name: 'Idle', value: idlePct, fill: ct.idle },
+    { name: 'Active', value: activePct, fill: ct.active }
   ];
 
   return (
@@ -35,7 +37,7 @@ export const RadialChart = ({ activeSeconds, idleSeconds, goalSeconds }: RadialC
             <RadialBar
               dataKey="value"
               cornerRadius={5}
-              background={{ fill: '#f9fafb' }}
+              background={{ fill: ct.radialBg }}
               angleAxisId={0}
             />
           </RadialBarChart>
@@ -47,11 +49,11 @@ export const RadialChart = ({ activeSeconds, idleSeconds, goalSeconds }: RadialC
       </div>
       <div className="flex items-center gap-4 text-[10px]">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#6366f1]" />
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: ct.active }} />
           <span className="text-[hsl(var(--muted))]">Active</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#e0e7ff]" />
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: ct.idle }} />
           <span className="text-[hsl(var(--muted))]">Idle</span>
         </span>
       </div>

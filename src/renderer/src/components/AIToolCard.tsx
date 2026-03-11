@@ -22,14 +22,14 @@ export const AIToolCard = ({ config, activeSeconds, sessionCount, isRunning }: A
         borderColor: config.borderColor
       }}
     >
-      <img src={logoSrc} alt={config.label} className="h-6 w-6 shrink-0" />
+      <img src={logoSrc} alt={config.label} className={`h-6 w-6 shrink-0${config.id === 'codex' ? ' dark:invert' : ''}`} />
       <div className="flex min-w-0 flex-1 items-center gap-5">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: config.color }}>
             {config.label}
           </span>
           {isRunning !== undefined && (
-            <span className="flex items-center gap-1 rounded-full bg-white/60 px-2 py-0.5 text-[10px] font-medium">
+            <span className="flex items-center gap-1 rounded-full bg-[hsl(var(--panel))]/60 px-2 py-0.5 text-[10px] font-medium">
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: isRunning ? '#22c55e' : '#d1d5db' }}
