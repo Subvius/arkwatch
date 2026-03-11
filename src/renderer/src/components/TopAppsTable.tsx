@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { TopAppStat } from '../../../shared/types';
 import { formatDuration } from '../lib/utils';
-import { detectAITool, AI_TOOLS } from '../lib/ai-tools';
+import { detectAITool, getAITools } from '../lib/ai-tools';
 import claudeLogoUrl from '../assets/claude-icon-logo.svg';
 import openaiLogoUrl from '../assets/openai-icon-logo.svg';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -13,6 +13,15 @@ type TopAppsTableProps = {
 const rowIconKey = (appName: string, exePath: string | null): string => `${appName}::${exePath ?? ''}`;
 
 export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => {
+  const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
+  React.useEffect(() => {
+    const update = (): void => setIsDark(document.documentElement.classList.contains('dark'));
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  const aiTools = React.useMemo(() => getAITools(isDark), [isDark]);
+
   const [nativeIconsByRowKey, setNativeIconsByRowKey] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
@@ -82,7 +91,7 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
 
     const initial = appName.trim().charAt(0).toUpperCase() || '?';
     return (
-      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-200 text-[11px] font-semibold text-slate-600">
+      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--border))] text-[11px] font-semibold text-[hsl(var(--muted))]">
         {initial}
       </span>
     );
@@ -100,7 +109,7 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
       <TableBody>
         {apps.map((row) => {
           const aiTool = detectAITool(row.appName, row.exePath);
-          const toolConfig = aiTool ? AI_TOOLS[aiTool] : null;
+          const toolConfig = aiTool ? aiTools[aiTool] : null;
 
           return (
             <TableRow key={`${row.appName}-${row.exePath ?? 'none'}`}>

@@ -11,6 +11,39 @@
   --accent: 220 9% 12%;
   --accent-ink: 0 0% 100%;
   --ring: 220 9% 12%;
+
+  --chart-active: #6366f1;
+  --chart-idle: #e0e7ff;
+  --chart-grid: #f3f4f6;
+  --chart-axis: #9ca3af;
+  --chart-axis-line: #e5e7eb;
+  --chart-tooltip-bg: #fff;
+  --chart-tooltip-border: #e5e7eb;
+  --chart-radial-bg: #f9fafb;
+  --chart-area-opacity: 0.2;
+  --chart-cursor-fill: rgba(0,0,0,0.02);
+}
+
+.dark {
+  --bg: 228 12% 8%;
+  --panel: 228 12% 11%;
+  --ink: 220 20% 88%;
+  --muted: 222 10% 48%;
+  --border: 225 10% 18%;
+  --accent: 234 89% 74%;
+  --accent-ink: 228 12% 8%;
+  --ring: 234 89% 74%;
+
+  --chart-active: #818cf8;
+  --chart-idle: #2e3150;
+  --chart-grid: #1e2030;
+  --chart-axis: #6b7189;
+  --chart-axis-line: #282b35;
+  --chart-tooltip-bg: #1e2030;
+  --chart-tooltip-border: #282b35;
+  --chart-radial-bg: #1a1c28;
+  --chart-area-opacity: 0.3;
+  --chart-cursor-fill: rgba(255,255,255,0.03);
 }
 
 * {
@@ -69,4 +102,11 @@ body {
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.15; }
+}
+
+/* View-transition for animated theme toggle */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }

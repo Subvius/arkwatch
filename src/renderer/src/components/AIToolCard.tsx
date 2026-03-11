@@ -29,7 +29,7 @@ export const AIToolCard = ({ config, activeSeconds, sessionCount, isRunning }: A
             {config.label}
           </span>
           {isRunning !== undefined && (
-            <span className="flex items-center gap-1 rounded-full bg-white/60 px-2 py-0.5 text-[10px] font-medium">
+            <span className="flex items-center gap-1 rounded-full bg-[hsl(var(--panel))]/60 px-2 py-0.5 text-[10px] font-medium">
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: isRunning ? '#22c55e' : '#d1d5db' }}
