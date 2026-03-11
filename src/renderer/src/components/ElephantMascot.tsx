@@ -8,6 +8,7 @@ export type ElephantMascotProps = {
   surfing: boolean;
   idleMode: IdleMode;
   scheduledIdle: boolean;
+  appFocused: boolean;
 };
 
 export type ElephantMascotHandle = {
@@ -269,7 +270,12 @@ const BASE_Y = 15;
 
 const FOOD_COLORS = ['#2ECC71', '#E74C3C', '#F4D03F', '#E67E22'];
 
+const gridCache = new Map<string[], React.ReactNode[]>();
+
 function renderGrid(gridData: string[]): React.ReactNode[] {
+  const cached = gridCache.get(gridData);
+  if (cached) return cached;
+
   const rects: React.ReactNode[] = [];
 
   gridData.forEach((row, y) => {
@@ -322,11 +328,12 @@ function renderGrid(gridData: string[]): React.ReactNode[] {
     }
   });
 
+  gridCache.set(gridData, rects);
   return rects;
 }
 
 export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMascotProps>(
-  ({ headwear, surfing: surfingProp, idleMode, scheduledIdle }, ref) => {
+  ({ headwear, surfing: surfingProp, idleMode, scheduledIdle, appFocused }, ref) => {
   const [frame, setFrame] = React.useState(0);
   const [isWearing, setIsWearing] = React.useState(false);
   const [isWearingHelmet, setIsWearingHelmet] = React.useState(false);
@@ -359,13 +366,14 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
   const bowlControls = useAnimation();
   const foodControls = useAnimation();
 
-  // Ear flapping + spark twinkle
+  // Ear flapping + spark twinkle (paused when app unfocused)
   React.useEffect(() => {
+    if (!appFocused) return;
     const interval = window.setInterval(() => {
       setFrame((prev) => (prev === 0 ? 1 : 0));
     }, 600);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [appFocused]);
 
   const resumeSurfingIfNeeded = React.useCallback((): void => {
     if (isSurfingRef.current) {
@@ -987,14 +995,14 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
     }
   }, [isWearingMedic, trunkControls, stethControls]);
 
-  // --- POLLING SYNC EFFECTS ---
-
-  // Idle sync effect
+  // --- CONSOLIDATED POLLING SYNC (paused when app unfocused) ---
   React.useEffect(() => {
+    if (!appFocused) return;
+
     const interval = window.setInterval(() => {
       if (isAnimating.current) return;
 
-      // Start/switch idle
+      // Idle sync
       if (idleMode !== 'none' && currentIdleModeRef.current !== idleMode) {
         if (isIdleRef.current) void cancelIdle();
         currentIdleModeRef.current = idleMode;
@@ -1004,52 +1012,39 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
         else if (idleMode === 'workout') void toggleWorkoutIdle();
         return;
       }
-      // Stop idle
       if (idleMode === 'none' && isIdleRef.current) {
         void cancelIdle();
         return;
       }
-    }, 500);
-    return () => window.clearInterval(interval);
-  }, [idleMode, cancelIdle, toggleSaladIdle, toggleSleepIdle, toggleWorkoutIdle]);
 
-  // Headwear sync effect (skip when idle)
-  React.useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (isAnimating.current || isIdleRef.current) return;
+      // Skip headwear/surfing sync when idle
+      if (isIdleRef.current) return;
 
-      // Remove wrong headwear first
+      // Headwear sync
       if (isWearingHelmet && headwear !== 'helmet') {
         void toggleHelmet();
       } else if (isWearingNightcap && headwear !== 'nightcap') {
         void toggleNightcap();
       } else if (isWearingMedic && headwear !== 'medic') {
         void toggleMedic();
-      }
-      // Then equip correct headwear
-      else if (headwear === 'helmet' && !isWearingHelmet) {
+      } else if (headwear === 'helmet' && !isWearingHelmet) {
         void toggleHelmet();
       } else if (headwear === 'nightcap' && !isWearingNightcap) {
         void toggleNightcap();
       } else if (headwear === 'medic' && !isWearingMedic) {
         void toggleMedic();
       }
-    }, 500);
 
-    return () => window.clearInterval(interval);
-  }, [headwear, isWearingHelmet, isWearingNightcap, isWearingMedic, toggleHelmet, toggleNightcap, toggleMedic]);
-
-  // Surfing sync effect (skip when idle)
-  React.useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (isAnimating.current || isIdleRef.current) return;
+      // Surfing sync
       if (surfingProp !== isSurfingRef.current) {
         void toggleSurfing();
       }
     }, 500);
 
     return () => window.clearInterval(interval);
-  }, [surfingProp, toggleSurfing]);
+  }, [appFocused, idleMode, cancelIdle, toggleSaladIdle, toggleSleepIdle, toggleWorkoutIdle,
+      headwear, isWearingHelmet, isWearingNightcap, isWearingMedic, toggleHelmet, toggleNightcap, toggleMedic,
+      surfingProp, toggleSurfing]);
 
   // Keep glasses and celebrate accessible
   void toggleGlasses;
@@ -1110,11 +1105,17 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
     sparkTrans = { repeat: Infinity, repeatType: 'mirror', duration: 1, ease: 'easeInOut' };
   }
 
+  // Freeze spark animations when app is unfocused
+  if (!appFocused) {
+    sparkAnim = { y: [0], x: [0], scale: [1], rotate: [0] };
+    sparkTrans = { duration: 0 };
+  }
+
   return (
     <div className="relative flex flex-col items-center">
       <motion.div
-        animate={{ y: [0, -8, 0] }}
-        transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+        animate={appFocused ? { y: [0, -8, 0] } : { y: 0 }}
+        transition={appFocused ? { repeat: Infinity, duration: 4, ease: 'easeInOut' } : { duration: 0.3 }}
         className="relative z-10 flex items-center justify-center"
       >
         <svg
@@ -1133,7 +1134,7 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
             <g transform={`translate(${BASE_X - 1 * PIXEL_SIZE}, ${BASE_Y + 11 * PIXEL_SIZE})`}>
               {renderGrid(surfboardGrid)}
 
-              {isSurfing && (
+              {isSurfing && appFocused && (
                 <g transform={`translate(${-1 * PIXEL_SIZE}, ${0})`}>
                   <motion.rect width={PIXEL_SIZE} height={PIXEL_SIZE} fill="#80D8FF"
                     initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}

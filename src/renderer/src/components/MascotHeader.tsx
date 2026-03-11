@@ -14,13 +14,13 @@ type MascotHeaderProps = ElephantMascotProps & {
   elephantRef: React.RefObject<ElephantMascotHandle | null>;
 };
 
-export const MascotHeader = ({ headwear, surfing, idleMode, scheduledIdle, elephantRef }: MascotHeaderProps): React.JSX.Element => {
+export const MascotHeader = ({ headwear, surfing, idleMode, scheduledIdle, appFocused, elephantRef }: MascotHeaderProps): React.JSX.Element => {
   const greeting = React.useMemo(() => getGreeting(), []);
   const dateStr = React.useMemo(() => format(new Date(), 'EEEE, MMMM d'), []);
 
   return (
     <div className="flex items-center justify-between py-1">
-      <ElephantMascot ref={elephantRef} headwear={headwear} surfing={surfing} idleMode={idleMode} scheduledIdle={scheduledIdle} />
+      <ElephantMascot ref={elephantRef} headwear={headwear} surfing={surfing} idleMode={idleMode} scheduledIdle={scheduledIdle} appFocused={appFocused} />
       <div className="text-right">
         <p className="text-sm font-medium text-[hsl(var(--foreground))]">{greeting}</p>
         <p className="text-xs text-[hsl(var(--muted))]">{dateStr}</p>

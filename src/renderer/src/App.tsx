@@ -85,6 +85,19 @@ export const App = (): React.JSX.Element => {
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
   const prevAppRef = React.useRef<string | null>(null);
 
+  // Track window focus for pausing mascot animations when app is in background
+  const [appFocused, setAppFocused] = React.useState(document.hasFocus());
+  React.useEffect(() => {
+    const onFocus = (): void => setAppFocused(true);
+    const onBlur = (): void => setAppFocused(false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
   const loadStatus = React.useCallback(async () => {
     const next = await window.arkwatch.tracker.getStatus();
     setStatus((prev) => {
@@ -232,6 +245,7 @@ export const App = (): React.JSX.Element => {
     }
 
     const check = (): void => {
+      if (!document.hasFocus()) return;
       const scheduled = getScheduledIdle(new Date());
       if (scheduled !== 'none') {
         setScheduledIdle(true);
@@ -275,7 +289,7 @@ export const App = (): React.JSX.Element => {
       }
       return;
     }
-    const roll = (): void => setIsMedicMode(Math.random() < 0.25);
+    const roll = (): void => { if (document.hasFocus()) setIsMedicMode(Math.random() < 0.25); };
     roll();
     medicTimerRef.current = window.setInterval(roll, 15 * 60 * 1000);
     return () => {
@@ -298,7 +312,7 @@ export const App = (): React.JSX.Element => {
             <DashboardSkeleton />
           ) : (
           <div className="mx-auto flex max-w-5xl flex-col gap-5">
-            <MascotHeader headwear={headwear} surfing={shouldSurf} idleMode={idleMode} scheduledIdle={scheduledIdle} elephantRef={elephantRef} />
+            <MascotHeader headwear={headwear} surfing={shouldSurf} idleMode={idleMode} scheduledIdle={scheduledIdle} appFocused={appFocused} elephantRef={elephantRef} />
             {/* Status Row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
