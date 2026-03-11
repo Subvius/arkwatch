@@ -22,7 +22,7 @@ export const AIToolCard = ({ config, activeSeconds, sessionCount, isRunning }: A
         borderColor: config.borderColor
       }}
     >
-      <img src={logoSrc} alt={config.label} className="h-6 w-6 shrink-0" />
+      <img src={logoSrc} alt={config.label} className={`h-6 w-6 shrink-0${config.id === 'codex' ? ' dark:invert' : ''}`} />
       <div className="flex min-w-0 flex-1 items-center gap-5">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: config.color }}>

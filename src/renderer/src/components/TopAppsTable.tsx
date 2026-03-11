@@ -81,7 +81,7 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
       return <img src={claudeLogoUrl} alt="Claude icon" className="h-5 w-5 shrink-0" />;
     }
     if (aiTool === 'codex') {
-      return <img src={openaiLogoUrl} alt="Codex icon" className="h-5 w-5 shrink-0" />;
+      return <img src={openaiLogoUrl} alt="Codex icon" className="h-5 w-5 shrink-0 dark:invert" />;
     }
 
     const nativeIcon = nativeIconsByRowKey[rowIconKey(appName, exePath)];
