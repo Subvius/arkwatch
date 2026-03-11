@@ -97,7 +97,8 @@ export const App = (): React.JSX.Element => {
   const aiToolConfigs = React.useMemo(() => getAITools(isDark), [isDark]);
 
   // Track window focus for pausing mascot animations when app is in background
-  const [appFocused, setAppFocused] = React.useState(document.hasFocus());
+  // Default to true — Electron window is focused on launch even if document.hasFocus() briefly returns false
+  const [appFocused, setAppFocused] = React.useState(true);
   React.useEffect(() => {
     const onFocus = (): void => setAppFocused(true);
     const onBlur = (): void => setAppFocused(false);
