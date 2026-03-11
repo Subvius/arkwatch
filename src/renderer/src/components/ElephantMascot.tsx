@@ -1028,6 +1028,11 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
       trunkControls.stop();
       stethControls.stop();
     }
+
+    return () => {
+      trunkControls.stop();
+      stethControls.stop();
+    };
   }, [isWearingMedic, appFocused, trunkControls, stethControls]);
 
   // --- CONSOLIDATED POLLING SYNC (paused when app unfocused) ---
