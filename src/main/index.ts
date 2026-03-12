@@ -70,6 +70,7 @@ const createWindow = (): BrowserWindow => {
         isHiddenToTray = true;
       } else {
         isQuiting = true;
+        app.quit();
       }
     }
   });
@@ -248,15 +249,19 @@ const bootstrap = async (): Promise<void> => {
 
   // Daily goal notification check (every 60s)
   const goalCheckTimer = setInterval(async () => {
-    if (!database || !settings.dailyGoalNotification) return;
-    const today = new Date().toISOString().slice(0, 10);
-    if (dailyGoalNotificationSentDate === today) return;
+    if (!database) return;
 
     try {
       const currentSettings = await database.getSettings();
       if (!currentSettings.dailyGoalNotification) return;
 
       const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const today = `${y}-${m}-${d}`;
+      if (dailyGoalNotificationSentDate === today) return;
+
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
       const summary = await database.getSummary({ from, to });
