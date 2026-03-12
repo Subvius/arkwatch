@@ -308,7 +308,7 @@ function WeekWidget({ data, apps }: { data: SummaryStats; apps: TopAppStat[] }):
 function MonthDialogBody({ data }: { data: SummaryStats }): React.JSX.Element {
   const ct = useChartTheme();
   const ready = useMorphingDialogReady();
-  const dailyAvg = Math.round(data.totalActiveSeconds / 30);
+  const dailyAvg = data.days.length > 0 ? Math.round(data.totalActiveSeconds / data.days.length) : 0;
   const busiest = getBusiestDay(data.days);
 
   const chartData = data.days.map((day) => ({
@@ -479,7 +479,7 @@ function TopAppDialogBody({
                 />
                 <Bar dataKey="hours" radius={[0, 3, 3, 0]} maxBarSize={18} isAnimationActive={ready} animationDuration={600} animationEasing="ease-out">
                   {barData.map((_entry, i) => (
-                    <Cell key={_entry.name} fill={APP_COLORS[i % APP_COLORS.length]} />
+                    <Cell key={i} fill={APP_COLORS[i % APP_COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
