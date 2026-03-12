@@ -367,6 +367,7 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
   const sparkSplashControls = useAnimation();
   const bowlControls = useAnimation();
   const foodControls = useAnimation();
+  const floatControls = useAnimation();
 
   // Ear flapping + spark twinkle (paused when app unfocused)
   React.useEffect(() => {
@@ -376,6 +377,16 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
     }, 600);
     return () => window.clearInterval(interval);
   }, [appFocused]);
+
+  // Float animation (paused when app unfocused)
+  React.useEffect(() => {
+    if (appFocused) {
+      floatControls.start({ y: [0, -8, 0], transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' } });
+    } else {
+      floatControls.stop();
+      floatControls.set({ y: 0 });
+    }
+  }, [appFocused, floatControls]);
 
   const resumeSurfingIfNeeded = React.useCallback((): void => {
     if (isSurfingRef.current) {
@@ -1154,8 +1165,7 @@ export const ElephantMascot = React.forwardRef<ElephantMascotHandle, ElephantMas
   return (
     <div className="relative flex flex-col items-center">
       <motion.div
-        animate={appFocused ? { y: [0, -8, 0] } : { y: 0 }}
-        transition={appFocused ? { repeat: Infinity, duration: 4, ease: 'easeInOut' } : { duration: 0.3 }}
+        animate={floatControls}
         className="relative z-10 flex items-center justify-center"
       >
         <svg
