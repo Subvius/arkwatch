@@ -6,9 +6,14 @@ directories:
 files:
   - out/**/*
   - package.json
+extraResources:
+  - from: build/logo.ico
+    to: assets/logo.ico
 asar: true
+afterPack: build/after-pack.cjs
 win:
   icon: build/logo.ico
+  executableName: ArkWatch
   target:
     - nsis
   artifactName: ArkWatch-${version}-setup.${ext}

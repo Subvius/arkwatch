@@ -20,8 +20,17 @@ let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
 
 const getAppIconPath = (): string | null => {
-  const iconPath = path.join(app.getAppPath(), 'build', 'logo.ico');
-  return existsSync(iconPath) ? iconPath : null;
+  const iconCandidates = app.isPackaged
+    ? [path.join(process.resourcesPath, 'assets', 'logo.ico')]
+    : [path.join(app.getAppPath(), 'build', 'logo.ico')];
+
+  for (const iconPath of iconCandidates) {
+    if (existsSync(iconPath)) {
+      return iconPath;
+    }
+  }
+
+  return null;
 };
 
 const createWindow = (): BrowserWindow => {
@@ -224,6 +233,11 @@ const bootstrap = async (): Promise<void> => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  app.setName('ArkWatch');
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.arkwatch.desktop');
+  }
+
   app.on('second-instance', () => {
     if (mainWindow) {
       mainWindow.show();
@@ -260,3 +274,4 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+

@@ -51,5 +51,5 @@ Unsigned installer output:
 
 ## Notes
 
-- The project is configured for local unsigned builds (`signAndEditExecutable: false`) while keeping a signed-ready electron-builder pipeline.
+- The project keeps signing optional for local builds (`signAndEditExecutable: false`). Windows EXE metadata/icon branding is applied in `build/after-pack.cjs` via `rcedit`, so ArkWatch appears correctly in Task Manager and shell surfaces.
 - To enable code signing for production, provide standard Electron Builder signing environment variables (for example `CSC_LINK` and `CSC_KEY_PASSWORD`) and adjust signing options as needed.
