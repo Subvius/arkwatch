@@ -7,7 +7,11 @@ import type { AIToolDailyStat, AppSettings, DateRange, SessionInput, SummaryStat
 const DEFAULT_SETTINGS: AppSettings = {
   idleThresholdSeconds: 300,
   launchAtLogin: true,
-  theme: 'light'
+  theme: 'light',
+  dailyGoalHours: 8,
+  minimizeToTray: true,
+  dailyGoalNotification: true,
+  autoCheckUpdates: true
 };
 
 type AIToolId = 'claude' | 'codex';
@@ -119,6 +123,22 @@ export class ArkWatchDatabase {
       if (row.key === 'theme' && (parsed === 'light' || parsed === 'dark')) {
         values.theme = parsed;
       }
+
+      if (row.key === 'dailyGoalHours' && typeof parsed === 'number') {
+        values.dailyGoalHours = Math.max(1, Math.min(24, Math.floor(parsed)));
+      }
+
+      if (row.key === 'minimizeToTray' && typeof parsed === 'boolean') {
+        values.minimizeToTray = parsed;
+      }
+
+      if (row.key === 'dailyGoalNotification' && typeof parsed === 'boolean') {
+        values.dailyGoalNotification = parsed;
+      }
+
+      if (row.key === 'autoCheckUpdates' && typeof parsed === 'boolean') {
+        values.autoCheckUpdates = parsed;
+      }
     }
 
     return values;
@@ -161,6 +181,55 @@ export class ArkWatchDatabase {
         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
         `,
         JSON.stringify(next.theme),
+        now
+      );
+    }
+
+    if (typeof next.dailyGoalHours === 'number') {
+      const dailyGoalHours = Math.max(1, Math.min(24, Math.floor(next.dailyGoalHours)));
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('dailyGoalHours', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(dailyGoalHours),
+        now
+      );
+    }
+
+    if (typeof next.minimizeToTray === 'boolean') {
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('minimizeToTray', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(next.minimizeToTray),
+        now
+      );
+    }
+
+    if (typeof next.dailyGoalNotification === 'boolean') {
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('dailyGoalNotification', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(next.dailyGoalNotification),
+        now
+      );
+    }
+
+    if (typeof next.autoCheckUpdates === 'boolean') {
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('autoCheckUpdates', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(next.autoCheckUpdates),
         now
       );
     }
@@ -374,6 +443,42 @@ export class ArkWatchDatabase {
       VALUES ('theme', ?, ?)
       `,
       JSON.stringify(DEFAULT_SETTINGS.theme),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('dailyGoalHours', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.dailyGoalHours),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('minimizeToTray', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.minimizeToTray),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('dailyGoalNotification', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.dailyGoalNotification),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('autoCheckUpdates', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.autoCheckUpdates),
       now
     );
   }

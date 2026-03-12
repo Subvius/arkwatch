@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { promises as fs, existsSync } from 'node:fs';
-import { app, BrowserWindow, Menu, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, nativeImage } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc';
 import { ArkWatchDatabase } from './db/database';
 import { registerIpcHandlers } from './ipc';
@@ -20,6 +20,8 @@ let isHiddenToTray = false;
 let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
 let disposeAutoUpdater: (() => void) | null = null;
+let minimizeToTray = true;
+let dailyGoalNotificationSentDate: string | null = null;
 
 const getAppIconPath = (): string | null => {
   const iconCandidates = app.isPackaged
@@ -62,9 +64,13 @@ const createWindow = (): BrowserWindow => {
 
   window.on('close', (event) => {
     if (!isQuiting) {
-      event.preventDefault();
-      window.hide();
-      isHiddenToTray = true;
+      if (minimizeToTray) {
+        event.preventDefault();
+        window.hide();
+        isHiddenToTray = true;
+      } else {
+        isQuiting = true;
+      }
     }
   });
 
@@ -82,6 +88,7 @@ const applyAppSettings = async (settings: AppSettings): Promise<void> => {
     openAtLogin: settings.launchAtLogin,
     path: process.execPath
   });
+  minimizeToTray = settings.minimizeToTray;
 };
 
 const createTray = (): { tray: Tray; refresh: () => void } => {
@@ -235,7 +242,37 @@ const bootstrap = async (): Promise<void> => {
   tray = trayBundle.tray;
   refreshTrayMenu = trayBundle.refresh;
 
-  disposeAutoUpdater = setupAutoUpdater(() => mainWindow);
+  if (settings.autoCheckUpdates) {
+    disposeAutoUpdater = setupAutoUpdater(() => mainWindow);
+  }
+
+  // Daily goal notification check (every 60s)
+  const goalCheckTimer = setInterval(async () => {
+    if (!database || !settings.dailyGoalNotification) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (dailyGoalNotificationSentDate === today) return;
+
+    try {
+      const currentSettings = await database.getSettings();
+      if (!currentSettings.dailyGoalNotification) return;
+
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+      const summary = await database.getSummary({ from, to });
+
+      if (summary.totalActiveSeconds >= currentSettings.dailyGoalHours * 3600) {
+        dailyGoalNotificationSentDate = today;
+        new Notification({
+          title: 'Daily Goal Reached!',
+          body: `You've hit your ${currentSettings.dailyGoalHours}h daily screen time goal.`
+        }).show();
+      }
+    } catch {
+      // ignore notification check errors
+    }
+  }, 60_000);
+  goalCheckTimer.unref();
 };
 
 if (!app.requestSingleInstanceLock()) {

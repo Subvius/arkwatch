@@ -45,6 +45,10 @@ export type AppSettings = {
   idleThresholdSeconds: number;
   launchAtLogin: boolean;
   theme: ThemeSetting;
+  dailyGoalHours: number;
+  minimizeToTray: boolean;
+  dailyGoalNotification: boolean;
+  autoCheckUpdates: boolean;
 };
 
 export type SessionInput = {
