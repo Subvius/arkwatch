@@ -1,3 +1,6 @@
+import type { ProgressInfo } from 'electron-updater';
+export type { ProgressInfo };
+
 export type DateRange = {
   from: string;
   to: string;
@@ -36,9 +39,12 @@ export type SummaryStats = {
   days: DailyStat[];
 };
 
+export type ThemeSetting = 'light' | 'dark';
+
 export type AppSettings = {
   idleThresholdSeconds: number;
   launchAtLogin: boolean;
+  theme: ThemeSetting;
 };
 
 export type SessionInput = {
@@ -78,6 +84,9 @@ export type ArkWatchApi = {
   };
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
+  };
+  updater: {
+    onDownloadProgress: (callback: (progress: ProgressInfo) => void) => () => void;
   };
   window: {
     minimize: () => void;

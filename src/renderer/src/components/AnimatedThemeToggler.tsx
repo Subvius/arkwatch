@@ -1,3 +1,4 @@
+import type { ThemeSetting } from '../../../shared/types';
 import * as React from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { flushSync } from 'react-dom';
@@ -46,10 +47,16 @@ export const AnimatedThemeToggler = ({
     );
 
     const applyTheme = (): void => {
-      const newTheme = !isDark;
-      setIsDark(newTheme);
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+      const nextTheme: ThemeSetting = isDark ? 'light' : 'dark';
+      const nextIsDark = nextTheme === 'dark';
+
+      setIsDark(nextIsDark);
+      document.documentElement.classList.toggle('dark', nextIsDark);
+      localStorage.setItem('theme', nextTheme);
+
+      void window.arkwatch.settings.update({ theme: nextTheme }).catch((error: unknown) => {
+        console.error('Failed to persist theme setting', error);
+      });
     };
 
     if (typeof document.startViewTransition !== 'function') {

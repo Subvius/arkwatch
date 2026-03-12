@@ -23,5 +23,9 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-publish: null
+publish:
+  provider: github
+  owner: Subvius
+  repo: arkwatch
+
 
