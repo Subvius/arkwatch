@@ -592,9 +592,29 @@ export function UsageWidgets(): React.JSX.Element {
   }, []);
 
   React.useEffect(() => {
-    void fetchData();
-    const timer = window.setInterval(() => void fetchData(), 60_000);
-    return () => window.clearInterval(timer);
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    const poll = async (): Promise<void> => {
+      try {
+        await fetchData();
+      } finally {
+        if (!cancelled) {
+          timeoutId = window.setTimeout(() => {
+            void poll();
+          }, 60_000);
+        }
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [fetchData]);
 
   return (
@@ -618,3 +638,4 @@ export function UsageWidgets(): React.JSX.Element {
     </section>
   );
 }
+
