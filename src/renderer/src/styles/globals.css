@@ -87,11 +87,18 @@ body {
 /* Custom scrollbar for main content */
 .main-scroll {
   overflow-y: auto;
+  scroll-behavior: smooth;
   scrollbar-width: none;
 }
 
 .main-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* Skip rendering for off-screen sections — browser-native virtualization */
+.cv-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
 }
 
 /* Skeleton pulse animation */

@@ -400,7 +400,7 @@ export const App = (): React.JSX.Element => {
             </div>
 
             {/* AI Tools - always show both in a row */}
-            <section>
+            <section className="cv-section">
               <h2 className="mb-2 text-xs font-medium text-[hsl(var(--muted))]">AI Tools</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 <AIToolCard
@@ -419,7 +419,7 @@ export const App = (): React.JSX.Element => {
             </section>
 
             {/* Stats + Radial */}
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="cv-section grid gap-4 lg:grid-cols-3">
               <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
                 <StatCard
                   label="Today Active"
@@ -453,7 +453,7 @@ export const App = (): React.JSX.Element => {
             </div>
 
             {/* Charts row: bar + area */}
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="cv-section grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border bg-[hsl(var(--panel))] p-5 shadow-sm">
                 <p className="mb-3 text-xs font-medium text-[hsl(var(--muted))]">Weekly Activity</p>
                 <WeeklyChart data={chartData} />
@@ -466,7 +466,7 @@ export const App = (): React.JSX.Element => {
             </div>
 
             {/* Top Apps */}
-            <section>
+            <section className="cv-section">
               <h2 className="mb-2 text-xs font-medium text-[hsl(var(--muted))]">Top Apps (7 days)</h2>
               <div className="rounded-lg border bg-[hsl(var(--panel))] shadow-sm">
                 <TopAppsTable apps={topApps} />
@@ -474,7 +474,9 @@ export const App = (): React.JSX.Element => {
             </section>
 
             {/* Usage Summary Widgets */}
-            <UsageWidgets />
+            <div className="cv-section">
+              <UsageWidgets />
+            </div>
           </div>
           )}
         </main>
