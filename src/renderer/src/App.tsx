@@ -340,6 +340,7 @@ export const App = (): React.JSX.Element => {
 
   const dailyGoalSeconds = 8 * 3600;
   const updatePercent = updateDownloadProgress ? Math.min(100, Math.max(0, updateDownloadProgress.percent)) : 0;
+  const isUpdateDownloadComplete = updatePercent >= 100;
   const roundedUpdatePercent = Math.round(updatePercent);
 
   return (
@@ -430,7 +431,7 @@ export const App = (): React.JSX.Element => {
               <section className="cv-section">
                 <div className="rounded-lg border bg-[hsl(var(--panel))] p-3 shadow-sm">
                   <div className="flex items-center justify-between text-xs font-medium">
-                    <span>{roundedUpdatePercent >= 100 ? 'Update ready to install' : 'Downloading update...'}</span>
+                    <span>{isUpdateDownloadComplete ? 'Update ready to install' : 'Downloading update...'}</span>
                     <span>{roundedUpdatePercent}%</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--border))]" role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={roundedUpdatePercent} aria-valuetext={`${updatePercent.toFixed(1)} percent`}>
