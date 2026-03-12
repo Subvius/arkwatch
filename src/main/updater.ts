@@ -76,34 +76,42 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
       return;
     }
 
-    const options: MessageBoxOptions = {
-      type: 'info',
-      title: 'Update Ready',
-      message: `ArkWatch ${info.version} has been downloaded.`,
-      detail: 'Restart now to apply the update.',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    };
+    try {
+      const options: MessageBoxOptions = {
+        type: 'info',
+        title: 'Update Ready',
+        message: `ArkWatch ${info.version} has been downloaded.`,
+        detail: 'Restart now to apply the update.',
+        buttons: ['Restart now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+      };
 
-    const mainWindow = getMainWindow();
-    const result = mainWindow && !mainWindow.isDestroyed()
-      ? await dialog.showMessageBox(mainWindow, options)
-      : await dialog.showMessageBox(options);
+      const mainWindow = getMainWindow();
+      const result = mainWindow && !mainWindow.isDestroyed()
+        ? await dialog.showMessageBox(mainWindow, options)
+        : await dialog.showMessageBox(options);
 
-    if (isDisposed) {
-      return;
-    }
+      if (isDisposed) {
+        return;
+      }
 
-    if (result.response === 0) {
-      setImmediate(() => {
-        if (isDisposed) {
-          return;
-        }
+      if (result.response === 0) {
+        setImmediate(() => {
+          if (isDisposed) {
+            return;
+          }
 
-        autoUpdater.quitAndInstall();
-      });
+          try {
+            autoUpdater.quitAndInstall();
+          } catch (error) {
+            console.error('[updater] quit and install failed', error);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[updater] update-downloaded handler failed', error);
     }
   };
 
