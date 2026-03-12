@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
 import { PauseCircle, PlayCircle, Settings2 } from 'lucide-react';
-import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, UpdateDownloadProgress } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo } from '../../shared/types';
 import { formatDuration } from './lib/utils';
 import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
@@ -99,7 +99,7 @@ export const App = (): React.JSX.Element => {
   const [idleMode, setIdleMode] = React.useState<IdleMode>('none');
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
   const [isMedicMode, setIsMedicMode] = React.useState(false);
-  const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<UpdateDownloadProgress | null>(null);
+  const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<ProgressInfo | null>(null);
   const medicTimerRef = React.useRef<number | null>(null);
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
@@ -433,8 +433,9 @@ export const App = (): React.JSX.Element => {
                     <span>{roundedUpdatePercent >= 100 ? 'Update ready to install' : 'Downloading update...'}</span>
                     <span>{roundedUpdatePercent}%</span>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--border))]" role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={roundedUpdatePercent} aria-valuetext={`${updatePercent.toFixed(1)} percent`}>
                     <div
+                      aria-hidden="true"
                       className="h-full bg-[hsl(var(--accent))] transition-[width] duration-200"
                       style={{ width: `${updatePercent.toFixed(1)}%` }}
                     />

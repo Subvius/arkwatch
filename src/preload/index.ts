@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ArkWatchApi, AppSettings, DateRange, UpdateDownloadProgress } from '../shared/types';
+import type { ArkWatchApi, AppSettings, DateRange, ProgressInfo } from '../shared/types';
 import { IPC_CHANNELS } from '../shared/ipc';
 
 const api: ArkWatchApi = {
@@ -25,8 +25,8 @@ const api: ArkWatchApi = {
     getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params)
   },
   updater: {
-    onDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => {
-      const handler = (_event: unknown, progress: UpdateDownloadProgress) => callback(progress);
+    onDownloadProgress: (callback: (progress: ProgressInfo) => void) => {
+      const handler = (_event: unknown, progress: ProgressInfo) => callback(progress);
       ipcRenderer.on(IPC_CHANNELS.updaterDownloadProgress, handler);
       return () => { ipcRenderer.removeListener(IPC_CHANNELS.updaterDownloadProgress, handler); };
     }

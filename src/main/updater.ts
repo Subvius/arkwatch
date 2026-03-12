@@ -1,14 +1,14 @@
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { IPC_CHANNELS } from '../shared/ipc';
-import type { UpdateDownloadProgress } from '../shared/types';
+import type { ProgressInfo } from '../shared/types';
 
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INITIAL_CHECK_DELAY_MS = 15 * 1000;
 
 type UpdaterWindowGetter = () => BrowserWindow | null;
 
-const sendDownloadProgress = (getMainWindow: UpdaterWindowGetter, progress: UpdateDownloadProgress): void => {
+const sendDownloadProgress = (getMainWindow: UpdaterWindowGetter, progress: ProgressInfo): void => {
   const mainWindow = getMainWindow();
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -51,7 +51,7 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     console.info('[updater] no updates available');
   };
 
-  const onDownloadProgress = (progress: UpdateDownloadProgress): void => {
+  const onDownloadProgress = (progress: ProgressInfo): void => {
     if (isDisposed) {
       return;
     }
@@ -59,12 +59,7 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     const roundedPercent = Math.round(progress.percent);
     console.info('[updater] download progress', `${roundedPercent}%`);
 
-    sendDownloadProgress(getMainWindow, {
-      bytesPerSecond: progress.bytesPerSecond,
-      percent: progress.percent,
-      transferred: progress.transferred,
-      total: progress.total
-    });
+    sendDownloadProgress(getMainWindow, progress);
   };
 
   const onError = (error: Error): void => {

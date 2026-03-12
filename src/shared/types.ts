@@ -1,3 +1,6 @@
+import type { ProgressInfo } from 'electron-updater';
+export type { ProgressInfo };
+
 export type DateRange = {
   from: string;
   to: string;
@@ -57,13 +60,6 @@ export type AIToolProcess = {
   running: boolean;
 };
 
-export type UpdateDownloadProgress = {
-  bytesPerSecond: number;
-  percent: number;
-  transferred: number;
-  total: number;
-};
-
 export type ArkWatchApi = {
   tracker: {
     getStatus: () => Promise<TrackerStatus>;
@@ -87,7 +83,7 @@ export type ArkWatchApi = {
     getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
   };
   updater: {
-    onDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => () => void;
+    onDownloadProgress: (callback: (progress: ProgressInfo) => void) => () => void;
   };
   window: {
     minimize: () => void;
