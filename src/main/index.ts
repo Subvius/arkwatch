@@ -34,6 +34,7 @@ const createWindow = (): BrowserWindow => {
     minHeight: 640,
     show: false,
     frame: false,
+    backgroundColor: '#131520',
     title: 'ArkWatch',
     ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
