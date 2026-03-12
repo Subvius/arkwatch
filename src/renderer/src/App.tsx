@@ -17,6 +17,7 @@ import { ActivityLineChart } from './components/ActivityLineChart';
 import { TopAppsTable } from './components/TopAppsTable';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
 import { MascotHeader } from './components/MascotHeader';
+import { UsageWidgets } from './components/UsageWidgets';
 import { isBrowserApp } from './lib/browser-detection';
 import type { ElephantMascotHandle, IdleMode } from './components/ElephantMascot';
 
@@ -471,6 +472,9 @@ export const App = (): React.JSX.Element => {
                 <TopAppsTable apps={topApps} />
               </div>
             </section>
+
+            {/* Usage Summary Widgets */}
+            <UsageWidgets />
           </div>
           )}
         </main>
