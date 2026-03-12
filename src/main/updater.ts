@@ -22,22 +22,40 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     return () => {};
   }
 
+  let isDisposed = false;
+
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('checking-for-update', () => {
+  const onCheckingForUpdate = (): void => {
+    if (isDisposed) {
+      return;
+    }
+
     console.info('[updater] checking for update');
-  });
+  };
 
-  autoUpdater.on('update-available', (info) => {
+  const onUpdateAvailable = (info: { version: string }): void => {
+    if (isDisposed) {
+      return;
+    }
+
     console.info('[updater] update available', info.version);
-  });
+  };
 
-  autoUpdater.on('update-not-available', () => {
+  const onUpdateNotAvailable = (): void => {
+    if (isDisposed) {
+      return;
+    }
+
     console.info('[updater] no updates available');
-  });
+  };
 
-  autoUpdater.on('download-progress', (progress) => {
+  const onDownloadProgress = (progress: UpdateDownloadProgress): void => {
+    if (isDisposed) {
+      return;
+    }
+
     const roundedPercent = Math.round(progress.percent);
     console.info('[updater] download progress', `${roundedPercent}%`);
 
@@ -47,13 +65,21 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
       transferred: progress.transferred,
       total: progress.total
     });
-  });
+  };
 
-  autoUpdater.on('error', (error) => {
+  const onError = (error: Error): void => {
+    if (isDisposed) {
+      return;
+    }
+
     console.error('[updater] failed', error);
-  });
+  };
 
-  autoUpdater.on('update-downloaded', async (info) => {
+  const onUpdateDownloaded = async (info: { version: string }): Promise<void> => {
+    if (isDisposed) {
+      return;
+    }
+
     const options: MessageBoxOptions = {
       type: 'info',
       title: 'Update Ready',
@@ -66,21 +92,44 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     };
 
     const mainWindow = getMainWindow();
-    const result = mainWindow
+    const result = mainWindow && !mainWindow.isDestroyed()
       ? await dialog.showMessageBox(mainWindow, options)
       : await dialog.showMessageBox(options);
 
+    if (isDisposed) {
+      return;
+    }
+
     if (result.response === 0) {
       setImmediate(() => {
+        if (isDisposed) {
+          return;
+        }
+
         autoUpdater.quitAndInstall();
       });
     }
-  });
+  };
+
+  autoUpdater.on('checking-for-update', onCheckingForUpdate);
+  autoUpdater.on('update-available', onUpdateAvailable);
+  autoUpdater.on('update-not-available', onUpdateNotAvailable);
+  autoUpdater.on('download-progress', onDownloadProgress);
+  autoUpdater.on('error', onError);
+  autoUpdater.on('update-downloaded', onUpdateDownloaded);
 
   const checkForUpdates = async (): Promise<void> => {
+    if (isDisposed) {
+      return;
+    }
+
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
+
       console.error('[updater] check failed', error);
     }
   };
@@ -97,7 +146,17 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
   recurringTimer.unref();
 
   return () => {
+    isDisposed = true;
+
     clearTimeout(initialTimer);
     clearInterval(recurringTimer);
+
+    autoUpdater.off('checking-for-update', onCheckingForUpdate);
+    autoUpdater.off('update-available', onUpdateAvailable);
+    autoUpdater.off('update-not-available', onUpdateNotAvailable);
+    autoUpdater.off('download-progress', onDownloadProgress);
+    autoUpdater.off('error', onError);
+    autoUpdater.off('update-downloaded', onUpdateDownloaded);
   };
 };
+
