@@ -7,6 +7,7 @@ import { registerIpcHandlers } from './ipc';
 import { ElectronActivitySource } from './tracker/electron-activity-source';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
 import { BackgroundProcessTracker } from './tracker/process-scanner';
+import { setupAutoUpdater } from './updater';
 import type { AppSettings } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -18,6 +19,7 @@ let isQuiting = false;
 let isHiddenToTray = false;
 let shutdownPromise: Promise<void> | null = null;
 let refreshTrayMenu: (() => void) | null = null;
+let disposeAutoUpdater: (() => void) | null = null;
 
 const getAppIconPath = (): string | null => {
   const iconCandidates = app.isPackaged
@@ -164,6 +166,10 @@ const createTray = (): { tray: Tray; refresh: () => void } => {
 };
 
 const shutdown = async (): Promise<void> => {
+  if (disposeAutoUpdater) {
+    disposeAutoUpdater();
+    disposeAutoUpdater = null;
+  }
   if (bgTracker) {
     await bgTracker.stop();
     bgTracker = null;
@@ -228,6 +234,8 @@ const bootstrap = async (): Promise<void> => {
   const trayBundle = createTray();
   tray = trayBundle.tray;
   refreshTrayMenu = trayBundle.refresh;
+
+  disposeAutoUpdater = setupAutoUpdater(() => mainWindow);
 };
 
 if (!app.requestSingleInstanceLock()) {
@@ -274,4 +282,5 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
 

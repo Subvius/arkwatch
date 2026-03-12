@@ -49,7 +49,29 @@ Unsigned installer output:
 
 - `release/0.1.0/ArkWatch-0.1.0-setup.exe`
 
+## Auto Updates
+
+ArkWatch now uses Electron's auto-updater in packaged builds.
+
+- Checks for updates 15 seconds after startup, then every 6 hours
+- Downloads updates automatically in the background
+- Prompts the user to restart when the update is ready
+- Installs automatically on quit if the user chooses "Later"
+
+Updates are pulled from GitHub Releases (`Subvius/arkwatch`) via `electron-builder` publish config.
+
+### Publish an update
+
+```powershell
+$env:GH_TOKEN = "<github-token-with-repo-access>"
+bun run dist:publish
+```
+
+This uploads installer/update metadata (`latest.yml`, blockmap, setup `.exe`) so existing installs can auto-update.
+
 ## Notes
 
 - The project keeps signing optional for local builds (`signAndEditExecutable: false`). Windows EXE metadata/icon branding is applied in `build/after-pack.cjs` via `rcedit`, so ArkWatch appears correctly in Task Manager and shell surfaces.
 - To enable code signing for production, provide standard Electron Builder signing environment variables (for example `CSC_LINK` and `CSC_KEY_PASSWORD`) and adjust signing options as needed.
+
+
