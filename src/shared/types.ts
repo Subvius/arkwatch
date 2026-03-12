@@ -39,9 +39,12 @@ export type SummaryStats = {
   days: DailyStat[];
 };
 
+export type ThemeSetting = 'light' | 'dark';
+
 export type AppSettings = {
   idleThresholdSeconds: number;
   launchAtLogin: boolean;
+  theme: ThemeSetting;
 };
 
 export type SessionInput = {
@@ -92,4 +95,3 @@ export type ArkWatchApi = {
     onRestoredFromTray: (callback: () => void) => () => void;
   };
 };
-

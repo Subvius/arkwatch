@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
 import { PauseCircle, PlayCircle, Settings2 } from 'lucide-react';
-import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo, ThemeSetting } from '../../shared/types';
 import { formatDuration } from './lib/utils';
 import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
@@ -78,6 +78,13 @@ const mapDailyStatsToAIToolStats = (dailyStats: AIToolDailyStat[]): AIToolStats 
   return stats;
 };
 
+const getDomTheme = (): ThemeSetting => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+
+const applyThemeToDocument = (theme: ThemeSetting): void => {
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+  localStorage.setItem('theme', theme);
+};
+
 export const App = (): React.JSX.Element => {
   const [status, setStatus] = React.useState<TrackerStatus>({
     running: true,
@@ -91,7 +98,7 @@ export const App = (): React.JSX.Element => {
   const [topApps, setTopApps] = React.useState<TopAppStat[]>([]);
   const [aiProcesses, setAiProcesses] = React.useState<AIToolProcess[]>([]);
   const [aiStats, setAiStats] = React.useState<AIToolStats>(emptyAIToolStats);
-  const [settings, setSettings] = React.useState<AppSettings>({ idleThresholdSeconds: 300, launchAtLogin: true });
+  const [settings, setSettings] = React.useState<AppSettings>({ idleThresholdSeconds: 300, launchAtLogin: true, theme: getDomTheme() });
   const [draftIdle, setDraftIdle] = React.useState('300');
   const [draftLaunchAtLogin, setDraftLaunchAtLogin] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -173,6 +180,7 @@ export const App = (): React.JSX.Element => {
 
   const loadSettings = React.useCallback(async () => {
     const nextSettings = await window.arkwatch.settings.get();
+    applyThemeToDocument(nextSettings.theme);
     setSettings(nextSettings);
     setDraftIdle(String(nextSettings.idleThresholdSeconds));
     setDraftLaunchAtLogin(nextSettings.launchAtLogin);
@@ -533,4 +541,3 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
-

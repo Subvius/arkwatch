@@ -6,7 +6,8 @@ import type { AIToolDailyStat, AppSettings, DateRange, SessionInput, SummaryStat
 
 const DEFAULT_SETTINGS: AppSettings = {
   idleThresholdSeconds: 300,
-  launchAtLogin: true
+  launchAtLogin: true,
+  theme: 'light'
 };
 
 type AIToolId = 'claude' | 'codex';
@@ -114,6 +115,10 @@ export class ArkWatchDatabase {
       if (row.key === 'launchAtLogin' && typeof parsed === 'boolean') {
         values.launchAtLogin = parsed;
       }
+
+      if (row.key === 'theme' && (parsed === 'light' || parsed === 'dark')) {
+        values.theme = parsed;
+      }
     }
 
     return values;
@@ -144,6 +149,18 @@ export class ArkWatchDatabase {
         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
         `,
         JSON.stringify(next.launchAtLogin),
+        now
+      );
+    }
+
+    if (next.theme === 'light' || next.theme === 'dark') {
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('theme', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(next.theme),
         now
       );
     }
@@ -348,6 +365,15 @@ export class ArkWatchDatabase {
       VALUES ('launchAtLogin', ?, ?)
       `,
       JSON.stringify(DEFAULT_SETTINGS.launchAtLogin),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('theme', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.theme),
       now
     );
   }
