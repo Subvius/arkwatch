@@ -1,5 +1,6 @@
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 import { IPC_CHANNELS } from '../shared/ipc';
 import type { ProgressInfo } from '../shared/types';
 
@@ -154,4 +155,5 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     autoUpdater.off('update-downloaded', onUpdateDownloaded);
   };
 };
+
 
