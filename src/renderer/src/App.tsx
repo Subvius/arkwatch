@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
 import { PauseCircle, PlayCircle, Settings2 } from 'lucide-react';
-import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, UpdateDownloadProgress } from '../../shared/types';
 import { formatDuration } from './lib/utils';
 import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
@@ -31,6 +31,24 @@ const emptySummary: SummaryStats = {
 const idleLabel = (idleSeconds: number): string => {
   if (idleSeconds < 60) return `${idleSeconds}s`;
   return `${Math.floor(idleSeconds / 60)}m`;
+};
+
+const formatBytes = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = value;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const precision = size >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(precision)} ${units[unitIndex]}`;
 };
 
 type AIToolStats = Record<AIToolId, { activeSeconds: number; sessionCount: number }>;
@@ -81,6 +99,7 @@ export const App = (): React.JSX.Element => {
   const [idleMode, setIdleMode] = React.useState<IdleMode>('none');
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
   const [isMedicMode, setIsMedicMode] = React.useState(false);
+  const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<UpdateDownloadProgress | null>(null);
   const medicTimerRef = React.useRef<number | null>(null);
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
@@ -235,6 +254,12 @@ export const App = (): React.JSX.Element => {
     });
   }, []);
 
+  React.useEffect(() => {
+    return window.arkwatch.updater.onDownloadProgress((progress) => {
+      setUpdateDownloadProgress(progress);
+    });
+  }, []);
+
   // Schedule checking (every 10s)
   React.useEffect(() => {
     const SCHEDULE: { start: [number, number]; end: [number, number]; mode: IdleMode }[] = [
@@ -314,6 +339,8 @@ export const App = (): React.JSX.Element => {
   }, [isClaudeRunning, isCodexRunning]);
 
   const dailyGoalSeconds = 8 * 3600;
+  const updatePercent = updateDownloadProgress ? Math.min(100, Math.max(0, updateDownloadProgress.percent)) : 0;
+  const roundedUpdatePercent = Math.round(updatePercent);
 
   return (
     <TooltipProvider>
@@ -398,6 +425,26 @@ export const App = (): React.JSX.Element => {
                 </Dialog>
               </div>
             </div>
+
+            {updateDownloadProgress ? (
+              <section className="cv-section">
+                <div className="rounded-lg border bg-[hsl(var(--panel))] p-3 shadow-sm">
+                  <div className="flex items-center justify-between text-xs font-medium">
+                    <span>{roundedUpdatePercent >= 100 ? 'Update ready to install' : 'Downloading update...'}</span>
+                    <span>{roundedUpdatePercent}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                    <div
+                      className="h-full bg-[hsl(var(--accent))] transition-[width] duration-200"
+                      style={{ width: `${updatePercent.toFixed(1)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-[hsl(var(--muted))]">
+                    {formatBytes(updateDownloadProgress.transferred)} / {formatBytes(updateDownloadProgress.total)} at {formatBytes(updateDownloadProgress.bytesPerSecond)}/s
+                  </p>
+                </div>
+              </section>
+            ) : null}
 
             {/* AI Tools - always show both in a row */}
             <section className="cv-section">
@@ -484,3 +531,4 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+

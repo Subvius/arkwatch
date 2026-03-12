@@ -57,6 +57,13 @@ export type AIToolProcess = {
   running: boolean;
 };
 
+export type UpdateDownloadProgress = {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
+};
+
 export type ArkWatchApi = {
   tracker: {
     getStatus: () => Promise<TrackerStatus>;
@@ -79,6 +86,9 @@ export type ArkWatchApi = {
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
   };
+  updater: {
+    onDownloadProgress: (callback: (progress: UpdateDownloadProgress) => void) => () => void;
+  };
   window: {
     minimize: () => void;
     maximize: () => void;
@@ -86,3 +96,4 @@ export type ArkWatchApi = {
     onRestoredFromTray: (callback: () => void) => () => void;
   };
 };
+

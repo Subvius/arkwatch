@@ -13,5 +13,6 @@ export const IPC_CHANNELS = {
   windowMinimize: 'window.minimize',
   windowMaximize: 'window.maximize',
   windowClose: 'window.close',
-  windowRestoredFromTray: 'window.restoredFromTray'
+  windowRestoredFromTray: 'window.restoredFromTray',
+  updaterDownloadProgress: 'updater.downloadProgress'
 } as const;
