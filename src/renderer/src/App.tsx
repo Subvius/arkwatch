@@ -230,9 +230,17 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   React.useEffect(() => {
-    void Promise.all([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings(), loadFocusData()]).then(() => {
-      setDataLoaded(true);
-    });
+    void Promise.allSettled([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings(), loadFocusData()])
+      .then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('[bootstrap] initial load failed', result.reason);
+          }
+        }
+      })
+      .finally(() => {
+        setDataLoaded(true);
+      });
 
     const statusTimer = window.setInterval(() => {
       void loadStatus();

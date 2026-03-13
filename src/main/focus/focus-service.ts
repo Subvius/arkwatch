@@ -29,6 +29,16 @@ export class FocusService {
   }
 
   async start(durationSec: number, label?: string): Promise<FocusSessionState> {
+    const normalizedDurationSec = Math.floor(durationSec);
+    if (!Number.isFinite(durationSec) || normalizedDurationSec <= 0) {
+      throw new Error('Focus session duration must be a positive integer number of seconds.');
+    }
+
+    const MAX_DURATION_SEC = 24 * 60 * 60;
+    if (normalizedDurationSec > MAX_DURATION_SEC) {
+      throw new Error('Focus session duration must be 24 hours or less.');
+    }
+
     if (this.state.active) {
       await this.stop();
     }
@@ -36,14 +46,14 @@ export class FocusService {
     const now = new Date().toISOString();
     this.sessionDbId = await this.db.insertFocusSession({
       startedAt: now,
-      plannedDurationSec: durationSec,
+      plannedDurationSec: normalizedDurationSec,
       label: label ?? null
     });
 
     this.state = {
       active: true,
-      remainingSeconds: durationSec,
-      plannedDurationSec: durationSec,
+      remainingSeconds: normalizedDurationSec,
+      plannedDurationSec: normalizedDurationSec,
       elapsedSeconds: 0,
       label: label ?? null
     };

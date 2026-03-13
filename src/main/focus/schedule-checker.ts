@@ -44,19 +44,26 @@ export class ScheduleChecker {
         const endMinutes = endH * 60 + endM;
 
         const isInSchedule = endMinutes > startMinutes
-          ? currentMinutes >= startMinutes && currentMinutes <= endMinutes
-          : currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+          ? currentMinutes >= startMinutes && currentMinutes < endMinutes
+          : currentMinutes >= startMinutes || currentMinutes < endMinutes;
 
-        if (isInSchedule) {
-          let deltaMinutes = (endMinutes - startMinutes + 1440) % 1440;
-          if (deltaMinutes === 0) {
-            deltaMinutes = 24 * 60;
-          }
-
-          const durationSec = deltaMinutes * 60;
-          await this.focusService.start(durationSec, schedule.label);
-          return;
+        if (!isInSchedule) {
+          continue;
         }
+
+        let deltaMinutes = (endMinutes - startMinutes + 1440) % 1440;
+        if (deltaMinutes === 0) {
+          deltaMinutes = 24 * 60;
+        }
+
+        let remainingMinutes = (endMinutes - currentMinutes + 1440) % 1440;
+        if (remainingMinutes === 0) {
+          remainingMinutes = endMinutes <= startMinutes ? 24 * 60 : deltaMinutes;
+        }
+
+        const durationSec = remainingMinutes * 60;
+        await this.focusService.start(durationSec, schedule.label);
+        return;
       }
     } catch {
       // ignore errors
