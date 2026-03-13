@@ -14,5 +14,24 @@ export const IPC_CHANNELS = {
   windowMaximize: 'window.maximize',
   windowClose: 'window.close',
   windowRestoredFromTray: 'window.restoredFromTray',
-  updaterDownloadProgress: 'updater.downloadProgress'
+  updaterDownloadProgress: 'updater.downloadProgress',
+  // Focus
+  focusGetState: 'focus.getState',
+  focusStart: 'focus.start',
+  focusStop: 'focus.stop',
+  focusGetTodayCount: 'focus.getTodayCount',
+  focusStateChanged: 'focus.stateChanged',
+  // App Limits
+  appLimitsGetAll: 'appLimits.getAll',
+  appLimitsUpsert: 'appLimits.upsert',
+  appLimitsRemove: 'appLimits.remove',
+  appLimitsGetStatuses: 'appLimits.getStatuses',
+  appLimitsExceeded: 'appLimits.exceeded',
+  // Focus Schedules
+  focusSchedulesGetAll: 'focusSchedules.getAll',
+  focusSchedulesCreate: 'focusSchedules.create',
+  focusSchedulesUpdate: 'focusSchedules.update',
+  focusSchedulesRemove: 'focusSchedules.remove',
+  // Break Reminder
+  breakReminderNotify: 'breakReminder.notify'
 } as const;

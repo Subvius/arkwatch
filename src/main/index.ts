@@ -9,12 +9,20 @@ import { ActivityTrackerService } from './tracker/activity-tracker-service';
 import { BackgroundProcessTracker } from './tracker/process-scanner';
 import { setupAutoUpdater } from './updater';
 import type { AppSettings } from '../shared/types';
+import { FocusService } from './focus/focus-service';
+import { BreakReminderService } from './focus/break-reminder-service';
+import { AppLimitChecker } from './focus/app-limit-checker';
+import { ScheduleChecker } from './focus/schedule-checker';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let database: ArkWatchDatabase | null = null;
 let tracker: ActivityTrackerService | null = null;
 let bgTracker: BackgroundProcessTracker | null = null;
+let focusService: FocusService | null = null;
+let breakReminderService: BreakReminderService | null = null;
+let appLimitChecker: AppLimitChecker | null = null;
+let scheduleChecker: ScheduleChecker | null = null;
 let isQuiting = false;
 let isHiddenToTray = false;
 let shutdownPromise: Promise<void> | null = null;
@@ -178,6 +186,22 @@ const shutdown = async (): Promise<void> => {
     disposeAutoUpdater();
     disposeAutoUpdater = null;
   }
+  if (scheduleChecker) {
+    scheduleChecker.stop();
+    scheduleChecker = null;
+  }
+  if (appLimitChecker) {
+    appLimitChecker.stop();
+    appLimitChecker = null;
+  }
+  if (breakReminderService) {
+    breakReminderService.stop();
+    breakReminderService = null;
+  }
+  if (focusService) {
+    focusService.dispose();
+    focusService = null;
+  }
   if (bgTracker) {
     await bgTracker.stop();
     bgTracker = null;
@@ -233,9 +257,19 @@ const bootstrap = async (): Promise<void> => {
   );
   await tracker.start();
 
+  const getMainWindow = (): BrowserWindow | null => mainWindow;
+
+  focusService = new FocusService(database, getMainWindow);
+  breakReminderService = new BreakReminderService(database, tracker, getMainWindow);
+  breakReminderService.start();
+  appLimitChecker = new AppLimitChecker(database, getMainWindow);
+  appLimitChecker.start();
+  scheduleChecker = new ScheduleChecker(database, focusService);
+  scheduleChecker.start();
+
   registerIpcHandlers(database, tracker, applyAppSettings, () => {
     refreshTrayMenu?.();
-  });
+  }, focusService, appLimitChecker);
 
   mainWindow = createWindow();
 

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ArkWatchApi, AppSettings, DateRange, ProgressInfo } from '../shared/types';
+import type { ArkWatchApi, AppLimit, AppSettings, DateRange, FocusSchedule, FocusSessionState, AppLimitStatus, ProgressInfo } from '../shared/types';
 import { IPC_CHANNELS } from '../shared/ipc';
 
 const api: ArkWatchApi = {
@@ -23,6 +23,41 @@ const api: ArkWatchApi = {
   },
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params)
+  },
+  focus: {
+    getState: () => ipcRenderer.invoke(IPC_CHANNELS.focusGetState),
+    start: (params: { durationSec: number; label?: string }) => ipcRenderer.invoke(IPC_CHANNELS.focusStart, params),
+    stop: () => ipcRenderer.invoke(IPC_CHANNELS.focusStop),
+    getTodayCount: () => ipcRenderer.invoke(IPC_CHANNELS.focusGetTodayCount),
+    onStateChanged: (callback: (state: FocusSessionState) => void) => {
+      const handler = (_event: unknown, state: FocusSessionState) => callback(state);
+      ipcRenderer.on(IPC_CHANNELS.focusStateChanged, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.focusStateChanged, handler); };
+    }
+  },
+  appLimits: {
+    getAll: () => ipcRenderer.invoke(IPC_CHANNELS.appLimitsGetAll),
+    upsert: (limit: Omit<AppLimit, 'id' | 'createdAt'>) => ipcRenderer.invoke(IPC_CHANNELS.appLimitsUpsert, limit),
+    remove: (id: number) => ipcRenderer.invoke(IPC_CHANNELS.appLimitsRemove, id),
+    getStatuses: () => ipcRenderer.invoke(IPC_CHANNELS.appLimitsGetStatuses),
+    onExceeded: (callback: (status: AppLimitStatus) => void) => {
+      const handler = (_event: unknown, status: AppLimitStatus) => callback(status);
+      ipcRenderer.on(IPC_CHANNELS.appLimitsExceeded, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.appLimitsExceeded, handler); };
+    }
+  },
+  focusSchedules: {
+    getAll: () => ipcRenderer.invoke(IPC_CHANNELS.focusSchedulesGetAll),
+    create: (schedule: Omit<FocusSchedule, 'id' | 'createdAt'>) => ipcRenderer.invoke(IPC_CHANNELS.focusSchedulesCreate, schedule),
+    update: (schedule: FocusSchedule) => ipcRenderer.invoke(IPC_CHANNELS.focusSchedulesUpdate, schedule),
+    remove: (id: number) => ipcRenderer.invoke(IPC_CHANNELS.focusSchedulesRemove, id)
+  },
+  breakReminder: {
+    onNotify: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.breakReminderNotify, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.breakReminderNotify, handler); };
+    }
   },
   updater: {
     onDownloadProgress: (callback: (progress: ProgressInfo) => void) => {
