@@ -2,6 +2,7 @@ import { BrowserWindow, Notification } from 'electron';
 import { ArkWatchDatabase } from '../db/database';
 import { ActivityTrackerService } from '../tracker/activity-tracker-service';
 import { IPC_CHANNELS } from '../../shared/ipc';
+import { FocusService } from './focus-service';
 
 export class BreakReminderService {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -11,6 +12,7 @@ export class BreakReminderService {
   constructor(
     private readonly db: ArkWatchDatabase,
     private readonly tracker: ActivityTrackerService,
+    private readonly focusService: FocusService,
     private readonly getWindow: () => BrowserWindow | null
   ) {}
 
@@ -46,8 +48,9 @@ export class BreakReminderService {
       if (this.continuousActiveSeconds >= thresholdSeconds) {
         const now = Date.now();
         if (now - this.lastNotifiedAt > thresholdSeconds * 1000 * 0.9) {
-          this.lastNotifiedAt = now;
-          this.continuousActiveSeconds = 0;
+          if (this.focusService.getState().active) {
+            return;
+          }
 
           new Notification({
             title: 'Time for a Break',
@@ -58,6 +61,9 @@ export class BreakReminderService {
           if (win && !win.isDestroyed()) {
             win.webContents.send(IPC_CHANNELS.breakReminderNotify);
           }
+
+          this.lastNotifiedAt = now;
+          this.continuousActiveSeconds = 0;
         }
       }
     } catch {

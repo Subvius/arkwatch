@@ -43,9 +43,17 @@ export class ScheduleChecker {
         const startMinutes = startH * 60 + startM;
         const endMinutes = endH * 60 + endM;
 
-        // Only auto-start at the beginning of the block (within 1 minute)
-        if (currentMinutes >= startMinutes && currentMinutes <= startMinutes + 1 && endMinutes > startMinutes) {
-          const durationSec = (endMinutes - startMinutes) * 60;
+        const isInSchedule = endMinutes > startMinutes
+          ? currentMinutes >= startMinutes && currentMinutes <= endMinutes
+          : currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+
+        if (isInSchedule) {
+          let deltaMinutes = (endMinutes - startMinutes + 1440) % 1440;
+          if (deltaMinutes === 0) {
+            deltaMinutes = 24 * 60;
+          }
+
+          const durationSec = deltaMinutes * 60;
           await this.focusService.start(durationSec, schedule.label);
           return;
         }

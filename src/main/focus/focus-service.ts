@@ -84,7 +84,12 @@ export class FocusService {
     return this.db.getTodayFocusSessionCount();
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
+    if (this.state.active) {
+      await this.stop();
+      return;
+    }
+
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;

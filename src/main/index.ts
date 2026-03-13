@@ -216,7 +216,7 @@ const shutdown = async (): Promise<void> => {
     breakReminderService = null;
   }
   if (focusService) {
-    focusService.dispose();
+    await focusService.dispose();
     focusService = null;
   }
   if (bgTracker) {
@@ -277,7 +277,7 @@ const bootstrap = async (): Promise<void> => {
   const getMainWindow = (): BrowserWindow | null => mainWindow;
 
   focusService = new FocusService(database, getMainWindow);
-  breakReminderService = new BreakReminderService(database, tracker, getMainWindow);
+  breakReminderService = new BreakReminderService(database, tracker, focusService, getMainWindow);
   breakReminderService.start();
   appLimitChecker = new AppLimitChecker(database, getMainWindow);
   appLimitChecker.start();
@@ -375,4 +375,5 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
 
