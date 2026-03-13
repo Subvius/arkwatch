@@ -100,6 +100,23 @@ const applyAppSettings = async (settings: AppSettings): Promise<void> => {
   minimizeToTray = settings.minimizeToTray;
 };
 
+const syncAutoUpdater = (settings: AppSettings): void => {
+  if (!settings.autoCheckUpdates) {
+    if (disposeAutoUpdater) {
+      disposeAutoUpdater();
+      disposeAutoUpdater = null;
+      console.info('[updater] disabled by user setting');
+    }
+    return;
+  }
+
+  if (disposeAutoUpdater) {
+    return;
+  }
+
+  disposeAutoUpdater = setupAutoUpdater(() => mainWindow);
+};
+
 const createTray = (): { tray: Tray; refresh: () => void } => {
   const appIconPath = getAppIconPath();
   const trayIconFromAppPath = appIconPath ? nativeImage.createFromPath(appIconPath) : nativeImage.createEmpty();
@@ -267,7 +284,10 @@ const bootstrap = async (): Promise<void> => {
   scheduleChecker = new ScheduleChecker(database, focusService);
   scheduleChecker.start();
 
-  registerIpcHandlers(database, tracker, applyAppSettings, () => {
+  registerIpcHandlers(database, tracker, async (nextSettings) => {
+    await applyAppSettings(nextSettings);
+    syncAutoUpdater(nextSettings);
+  }, () => {
     refreshTrayMenu?.();
   }, focusService, appLimitChecker);
 
@@ -276,10 +296,7 @@ const bootstrap = async (): Promise<void> => {
   const trayBundle = createTray();
   tray = trayBundle.tray;
   refreshTrayMenu = trayBundle.refresh;
-
-  if (settings.autoCheckUpdates) {
-    disposeAutoUpdater = setupAutoUpdater(() => mainWindow);
-  }
+  syncAutoUpdater(settings);
 
   // Daily goal notification check (every 60s)
   const goalCheckTimer = setInterval(async () => {
@@ -358,5 +375,4 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
-
 

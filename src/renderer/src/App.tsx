@@ -129,6 +129,7 @@ export const App = (): React.JSX.Element => {
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
   const [isMedicMode, setIsMedicMode] = React.useState(false);
   const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<ProgressInfo | null>(null);
+  const updatesDisabledInDev = window.location.protocol === 'http:';
   const medicTimerRef = React.useRef<number | null>(null);
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
@@ -209,7 +210,7 @@ export const App = (): React.JSX.Element => {
     setDraftDailyGoalHours(String(nextSettings.dailyGoalHours));
     setDraftMinimizeToTray(nextSettings.minimizeToTray);
     setDraftDailyGoalNotification(nextSettings.dailyGoalNotification);
-    setDraftAutoCheckUpdates(nextSettings.autoCheckUpdates);
+    setDraftAutoCheckUpdates(updatesDisabledInDev ? false : nextSettings.autoCheckUpdates);
     setDraftBreakReminderEnabled(nextSettings.breakReminderEnabled);
     setDraftBreakReminderInterval(String(nextSettings.breakReminderIntervalMinutes));
     setDraftTheme(nextSettings.theme);
@@ -270,7 +271,7 @@ export const App = (): React.JSX.Element => {
       dailyGoalHours: Number.isNaN(dailyGoalHours) ? settings.dailyGoalHours : dailyGoalHours,
       minimizeToTray: draftMinimizeToTray,
       dailyGoalNotification: draftDailyGoalNotification,
-      autoCheckUpdates: draftAutoCheckUpdates,
+      autoCheckUpdates: updatesDisabledInDev ? false : draftAutoCheckUpdates,
       breakReminderEnabled: draftBreakReminderEnabled,
       breakReminderIntervalMinutes: Number.isNaN(breakReminderIntervalMinutes) ? settings.breakReminderIntervalMinutes : breakReminderIntervalMinutes
     });
@@ -457,7 +458,7 @@ export const App = (): React.JSX.Element => {
                     setDraftDailyGoalHours(String(settings.dailyGoalHours));
                     setDraftMinimizeToTray(settings.minimizeToTray);
                     setDraftDailyGoalNotification(settings.dailyGoalNotification);
-                    setDraftAutoCheckUpdates(settings.autoCheckUpdates);
+                    setDraftAutoCheckUpdates(updatesDisabledInDev ? false : settings.autoCheckUpdates);
                     setDraftBreakReminderEnabled(settings.breakReminderEnabled);
                     setDraftBreakReminderInterval(String(settings.breakReminderIntervalMinutes));
                     setDraftTheme(settings.theme);
@@ -554,9 +555,10 @@ export const App = (): React.JSX.Element => {
                               type="checkbox"
                               checked={draftAutoCheckUpdates}
                               onChange={(e) => setDraftAutoCheckUpdates(e.target.checked)}
+                              disabled={updatesDisabledInDev}
                               className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
                             />
-                            Auto-check for updates
+                            {updatesDisabledInDev ? 'Auto-check for updates (disabled in dev)' : 'Auto-check for updates'}
                           </label>
 
                           <div className="h-px bg-[hsl(var(--border))]" />
@@ -766,3 +768,4 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+

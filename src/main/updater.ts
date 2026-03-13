@@ -9,6 +9,22 @@ const INITIAL_CHECK_DELAY_MS = 15 * 1000;
 
 type UpdaterWindowGetter = () => BrowserWindow | null;
 
+const getUpdaterSkipReason = (): string | null => {
+  if (process.env.ARKWATCH_DISABLE_UPDATES === '1') {
+    return 'ARKWATCH_DISABLE_UPDATES=1';
+  }
+
+  if (!app.isPackaged) {
+    return 'app is not packaged';
+  }
+
+  if (process.env.NODE_ENV === 'development' || typeof process.env.ELECTRON_RENDERER_URL === 'string') {
+    return 'development runtime detected';
+  }
+
+  return null;
+};
+
 const sendDownloadProgress = (getMainWindow: UpdaterWindowGetter, progress: ProgressInfo): void => {
   const mainWindow = getMainWindow();
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -19,7 +35,9 @@ const sendDownloadProgress = (getMainWindow: UpdaterWindowGetter, progress: Prog
 };
 
 export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => void) => {
-  if (!app.isPackaged) {
+  const skipReason = getUpdaterSkipReason();
+  if (skipReason) {
+    console.info('[updater] disabled', skipReason);
     return () => {};
   }
 
@@ -163,5 +181,4 @@ export const setupAutoUpdater = (getMainWindow: UpdaterWindowGetter): (() => voi
     autoUpdater.off('update-downloaded', onUpdateDownloaded);
   };
 };
-
 
