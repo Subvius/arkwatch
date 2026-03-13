@@ -9,6 +9,7 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-ink))] hover:bg-[hsl(var(--accent))]/90',
         ghost: 'hover:bg-[hsl(var(--border))]',
+        outline: 'border border-[hsl(var(--border))] hover:bg-[hsl(var(--border))]',
         destructive: 'bg-red-600 text-white hover:bg-red-700'
       },
       size: {

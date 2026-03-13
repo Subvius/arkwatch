@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { flushSync } from 'react-dom';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
-import { PauseCircle, PlayCircle, Settings, Sun, Moon } from 'lucide-react';
+import { PauseCircle, PlayCircle, Settings } from 'lucide-react';
 import githubLogo from './assets/github-dark-logo.svg';
-import type { AIToolDailyStat, AIToolProcess, AppSettings, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo, ThemeSetting } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppLimit, AppSettings, FocusSchedule, FocusSessionState, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo, ThemeSetting } from '../../shared/types';
 import { formatDuration } from './lib/utils';
 import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
@@ -20,6 +19,10 @@ import { TopAppsTable } from './components/TopAppsTable';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
 import { MascotHeader } from './components/MascotHeader';
 import { UsageWidgets } from './components/UsageWidgets';
+import { FocusWidget } from './components/FocusWidget';
+import { AppLimitsSettings } from './components/settings/AppLimitsSettings';
+import { FocusScheduleSettings } from './components/settings/FocusScheduleSettings';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { isBrowserApp } from './lib/browser-detection';
 import type { ElephantMascotHandle, IdleMode } from './components/ElephantMascot';
 
@@ -100,10 +103,16 @@ export const App = (): React.JSX.Element => {
   const [topApps, setTopApps] = React.useState<TopAppStat[]>([]);
   const [aiProcesses, setAiProcesses] = React.useState<AIToolProcess[]>([]);
   const [aiStats, setAiStats] = React.useState<AIToolStats>(emptyAIToolStats);
+  const [focusState, setFocusState] = React.useState<FocusSessionState>({
+    active: false, remainingSeconds: 0, plannedDurationSec: 0, elapsedSeconds: 0, label: null
+  });
+  const [focusTodayCount, setFocusTodayCount] = React.useState(0);
+  const [appLimits, setAppLimits] = React.useState<AppLimit[]>([]);
+  const [focusSchedules, setFocusSchedules] = React.useState<FocusSchedule[]>([]);
   const [settings, setSettings] = React.useState<AppSettings>({
     idleThresholdSeconds: 300, launchAtLogin: true, theme: getDomTheme(),
     dailyGoalHours: 8, minimizeToTray: true, dailyGoalNotification: true,
-    autoCheckUpdates: true
+    autoCheckUpdates: true, breakReminderEnabled: true, breakReminderIntervalMinutes: 90
   });
   const [draftIdle, setDraftIdle] = React.useState('300');
   const [draftLaunchAtLogin, setDraftLaunchAtLogin] = React.useState(true);
@@ -111,6 +120,8 @@ export const App = (): React.JSX.Element => {
   const [draftMinimizeToTray, setDraftMinimizeToTray] = React.useState(true);
   const [draftDailyGoalNotification, setDraftDailyGoalNotification] = React.useState(true);
   const [draftAutoCheckUpdates, setDraftAutoCheckUpdates] = React.useState(true);
+  const [draftBreakReminderEnabled, setDraftBreakReminderEnabled] = React.useState(true);
+  const [draftBreakReminderInterval, setDraftBreakReminderInterval] = React.useState('90');
   const [draftTheme, setDraftTheme] = React.useState<ThemeSetting>(getDomTheme());
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [dataLoaded, setDataLoaded] = React.useState(false);
@@ -118,12 +129,11 @@ export const App = (): React.JSX.Element => {
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
   const [isMedicMode, setIsMedicMode] = React.useState(false);
   const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<ProgressInfo | null>(null);
+  const updatesDisabledInDev = window.location.protocol === 'http:';
   const medicTimerRef = React.useRef<number | null>(null);
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
   const prevAppRef = React.useRef<string | null>(null);
-  const lightBtnRef = React.useRef<HTMLButtonElement>(null);
-  const darkBtnRef = React.useRef<HTMLButtonElement>(null);
 
   // Track dark mode for theme-dependent configs
   const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
@@ -200,14 +210,37 @@ export const App = (): React.JSX.Element => {
     setDraftDailyGoalHours(String(nextSettings.dailyGoalHours));
     setDraftMinimizeToTray(nextSettings.minimizeToTray);
     setDraftDailyGoalNotification(nextSettings.dailyGoalNotification);
-    setDraftAutoCheckUpdates(nextSettings.autoCheckUpdates);
+    setDraftAutoCheckUpdates(updatesDisabledInDev ? false : nextSettings.autoCheckUpdates);
+    setDraftBreakReminderEnabled(nextSettings.breakReminderEnabled);
+    setDraftBreakReminderInterval(String(nextSettings.breakReminderIntervalMinutes));
     setDraftTheme(nextSettings.theme);
   }, []);
 
+  const loadFocusData = React.useCallback(async () => {
+    const [state, count, limits, schedules] = await Promise.all([
+      window.arkwatch.focus.getState(),
+      window.arkwatch.focus.getTodayCount(),
+      window.arkwatch.appLimits.getAll(),
+      window.arkwatch.focusSchedules.getAll()
+    ]);
+    setFocusState(state);
+    setFocusTodayCount(count);
+    setAppLimits(limits);
+    setFocusSchedules(schedules);
+  }, []);
+
   React.useEffect(() => {
-    void Promise.all([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings()]).then(() => {
-      setDataLoaded(true);
-    });
+    void Promise.allSettled([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings(), loadFocusData()])
+      .then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('[bootstrap] initial load failed', result.reason);
+          }
+        }
+      })
+      .finally(() => {
+        setDataLoaded(true);
+      });
 
     const statusTimer = window.setInterval(() => {
       void loadStatus();
@@ -227,7 +260,7 @@ export const App = (): React.JSX.Element => {
       window.clearInterval(dataTimer);
       window.clearInterval(processTimer);
     };
-  }, [loadAIStats, loadData, loadProcesses, loadSettings, loadStatus]);
+  }, [loadAIStats, loadData, loadFocusData, loadProcesses, loadSettings, loadStatus]);
 
   const toggleTracking = async (): Promise<void> => {
     const next = await window.arkwatch.tracker.toggle();
@@ -239,48 +272,21 @@ export const App = (): React.JSX.Element => {
   const saveSettings = async (): Promise<void> => {
     const idleThresholdSeconds = Number.parseInt(draftIdle, 10);
     const dailyGoalHours = Number.parseInt(draftDailyGoalHours, 10);
+    const breakReminderIntervalMinutes = Number.parseInt(draftBreakReminderInterval, 10);
     const updated = await window.arkwatch.settings.update({
       idleThresholdSeconds: Number.isNaN(idleThresholdSeconds) ? settings.idleThresholdSeconds : idleThresholdSeconds,
       launchAtLogin: draftLaunchAtLogin,
       dailyGoalHours: Number.isNaN(dailyGoalHours) ? settings.dailyGoalHours : dailyGoalHours,
       minimizeToTray: draftMinimizeToTray,
       dailyGoalNotification: draftDailyGoalNotification,
-      autoCheckUpdates: draftAutoCheckUpdates
+      autoCheckUpdates: updatesDisabledInDev ? false : draftAutoCheckUpdates,
+      breakReminderEnabled: draftBreakReminderEnabled,
+      breakReminderIntervalMinutes: Number.isNaN(breakReminderIntervalMinutes) ? settings.breakReminderIntervalMinutes : breakReminderIntervalMinutes
     });
     setSettings(updated);
     setSettingsOpen(false);
   };
 
-  const switchTheme = React.useCallback((next: ThemeSetting, btn: HTMLButtonElement | null) => {
-    if (next === draftTheme || !btn) return;
-
-    const apply = (): void => {
-      setDraftTheme(next);
-      applyThemeToDocument(next);
-      setSettings((prev) => ({ ...prev, theme: next }));
-      void window.arkwatch.settings.update({ theme: next });
-    };
-
-    if (typeof document.startViewTransition !== 'function') {
-      apply();
-      return;
-    }
-
-    const { top, left, width, height } = btn.getBoundingClientRect();
-    const x = left + width / 2;
-    const y = top + height / 2;
-    const vw = window.visualViewport?.width ?? window.innerWidth;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
-    const maxRadius = Math.hypot(Math.max(x, vw - x), Math.max(y, vh - y));
-
-    const transition = document.startViewTransition(() => { flushSync(apply); });
-    transition.ready.then(() => {
-      document.documentElement.animate(
-        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${maxRadius}px at ${x}px ${y}px)`] },
-        { duration: 400, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' }
-      );
-    });
-  }, [draftTheme]);
 
   const chartData = React.useMemo(
     () =>
@@ -313,6 +319,15 @@ export const App = (): React.JSX.Element => {
   React.useEffect(() => {
     return window.arkwatch.window.onRestoredFromTray(() => {
       elephantRef.current?.triggerGreeting();
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return window.arkwatch.focus.onStateChanged((state) => {
+      setFocusState(state);
+      if (!state.active) {
+        void window.arkwatch.focus.getTodayCount().then(setFocusTodayCount);
+      }
     });
   }, []);
 
@@ -451,7 +466,9 @@ export const App = (): React.JSX.Element => {
                     setDraftDailyGoalHours(String(settings.dailyGoalHours));
                     setDraftMinimizeToTray(settings.minimizeToTray);
                     setDraftDailyGoalNotification(settings.dailyGoalNotification);
-                    setDraftAutoCheckUpdates(settings.autoCheckUpdates);
+                    setDraftAutoCheckUpdates(updatesDisabledInDev ? false : settings.autoCheckUpdates);
+                    setDraftBreakReminderEnabled(settings.breakReminderEnabled);
+                    setDraftBreakReminderInterval(String(settings.breakReminderIntervalMinutes));
                     setDraftTheme(settings.theme);
                   }
                 }}>
@@ -460,7 +477,7 @@ export const App = (): React.JSX.Element => {
                       <Settings className="h-4 w-4" />
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-h-[85vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <DialogContent className="max-h-[85vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-lg">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <Settings className="h-4 w-4 text-[hsl(var(--muted))]" />
@@ -469,128 +486,151 @@ export const App = (): React.JSX.Element => {
                       <DialogDescription>Configure your ArkWatch preferences.</DialogDescription>
                     </DialogHeader>
 
-                    {/* — GENERAL — */}
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]">General</p>
+                    <Tabs defaultValue="general">
+                      <TabsList className="w-full">
+                        <TabsTrigger value="general">General</TabsTrigger>
+                        <TabsTrigger value="notifications">Alerts</TabsTrigger>
+                        <TabsTrigger value="app-limits">Limits</TabsTrigger>
+                        <TabsTrigger value="focus-schedule">Schedule</TabsTrigger>
+                      </TabsList>
 
-                      <div className="grid gap-3">
-                        <label className="grid gap-1.5 text-sm font-medium" htmlFor="daily-goal">
-                          Daily goal (hours)
-                          <Input
-                            id="daily-goal"
-                            type="number"
-                            min={1}
-                            max={24}
-                            value={draftDailyGoalHours}
-                            onChange={(e) => setDraftDailyGoalHours(e.target.value)}
-                          />
-                        </label>
+                      <TabsContent value="general">
+                        <div className="grid gap-3">
+                          <label className="grid gap-1.5 text-sm font-medium" htmlFor="daily-goal">
+                            Daily goal (hours)
+                            <Input
+                              id="daily-goal"
+                              type="number"
+                              min={1}
+                              max={24}
+                              value={draftDailyGoalHours}
+                              onChange={(e) => setDraftDailyGoalHours(e.target.value)}
+                            />
+                          </label>
 
-                        <label className="grid gap-1.5 text-sm font-medium" htmlFor="idle-threshold">
-                          Idle threshold (seconds)
-                          <Input
-                            id="idle-threshold"
-                            type="number"
-                            min={60}
-                            max={1800}
-                            value={draftIdle}
-                            onChange={(e) => setDraftIdle(e.target.value)}
-                          />
-                        </label>
+                          <label className="grid gap-1.5 text-sm font-medium" htmlFor="idle-threshold">
+                            Idle threshold (seconds)
+                            <Input
+                              id="idle-threshold"
+                              type="number"
+                              min={60}
+                              max={1800}
+                              value={draftIdle}
+                              onChange={(e) => setDraftIdle(e.target.value)}
+                            />
+                          </label>
 
-                        <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="launch-login">
-                          <input
-                            id="launch-login"
-                            type="checkbox"
-                            checked={draftLaunchAtLogin}
-                            onChange={(e) => setDraftLaunchAtLogin(e.target.checked)}
-                            className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
-                          />
-                          Launch at Windows startup
-                        </label>
+                          <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="launch-login">
+                            <input
+                              id="launch-login"
+                              type="checkbox"
+                              checked={draftLaunchAtLogin}
+                              onChange={(e) => setDraftLaunchAtLogin(e.target.checked)}
+                              className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
+                            />
+                            Launch at Windows startup
+                          </label>
 
-                        <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="minimize-tray">
-                          <input
-                            id="minimize-tray"
-                            type="checkbox"
-                            checked={draftMinimizeToTray}
-                            onChange={(e) => setDraftMinimizeToTray(e.target.checked)}
-                            className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
-                          />
-                          Minimize to tray on close
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="h-px bg-[hsl(var(--border))]" />
-
-                    {/* — NOTIFICATIONS & UPDATES — */}
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]">Notifications & Updates</p>
-
-                      <div className="grid gap-3">
-                        <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="goal-notification">
-                          <input
-                            id="goal-notification"
-                            type="checkbox"
-                            checked={draftDailyGoalNotification}
-                            onChange={(e) => setDraftDailyGoalNotification(e.target.checked)}
-                            className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
-                          />
-                          Notify when daily goal reached
-                        </label>
-
-                        <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="auto-updates">
-                          <input
-                            id="auto-updates"
-                            type="checkbox"
-                            checked={draftAutoCheckUpdates}
-                            onChange={(e) => setDraftAutoCheckUpdates(e.target.checked)}
-                            className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
-                          />
-                          Auto-check for updates
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="h-px bg-[hsl(var(--border))]" />
-
-                    {/* — APPEARANCE — */}
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]">Appearance</p>
-
-                      <div className="flex items-center gap-1.5">
-                        <span className="mr-auto text-sm font-medium">Theme</span>
-                        <div className="inline-flex rounded-md border p-0.5">
-                          <button
-                            type="button"
-                            ref={lightBtnRef}
-                            onClick={() => switchTheme('light', lightBtnRef.current)}
-                            className={`inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
-                              draftTheme === 'light'
-                                ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-ink))]'
-                                : 'text-[hsl(var(--muted))] hover:text-[hsl(var(--ink))]'
-                            }`}
-                          >
-                            <Sun className="h-3 w-3" />
-                            Light
-                          </button>
-                          <button
-                            type="button"
-                            ref={darkBtnRef}
-                            onClick={() => switchTheme('dark', darkBtnRef.current)}
-                            className={`inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
-                              draftTheme === 'dark'
-                                ? 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-ink))]'
-                                : 'text-[hsl(var(--muted))] hover:text-[hsl(var(--ink))]'
-                            }`}
-                          >
-                            <Moon className="h-3 w-3" />
-                            Dark
-                          </button>
+                          <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="minimize-tray">
+                            <input
+                              id="minimize-tray"
+                              type="checkbox"
+                              checked={draftMinimizeToTray}
+                              onChange={(e) => setDraftMinimizeToTray(e.target.checked)}
+                              className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
+                            />
+                            Minimize to tray on close
+                          </label>
                         </div>
-                      </div>
-                    </div>
+                      </TabsContent>
+
+                      <TabsContent value="notifications">
+                        <div className="grid gap-3">
+                          <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="goal-notification">
+                            <input
+                              id="goal-notification"
+                              type="checkbox"
+                              checked={draftDailyGoalNotification}
+                              onChange={(e) => setDraftDailyGoalNotification(e.target.checked)}
+                              className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
+                            />
+                            Notify when daily goal reached
+                          </label>
+
+                          <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="auto-updates">
+                            <input
+                              id="auto-updates"
+                              type="checkbox"
+                              checked={draftAutoCheckUpdates}
+                              onChange={(e) => setDraftAutoCheckUpdates(e.target.checked)}
+                              disabled={updatesDisabledInDev}
+                              className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
+                            />
+                            {updatesDisabledInDev ? 'Auto-check for updates (disabled in dev)' : 'Auto-check for updates'}
+                          </label>
+
+                          <div className="h-px bg-[hsl(var(--border))]" />
+
+                          <label className="inline-flex items-center gap-2.5 text-sm font-medium" htmlFor="break-reminder">
+                            <input
+                              id="break-reminder"
+                              type="checkbox"
+                              checked={draftBreakReminderEnabled}
+                              onChange={(e) => setDraftBreakReminderEnabled(e.target.checked)}
+                              className="h-4 w-4 rounded border accent-[hsl(var(--accent))]"
+                            />
+                            Break reminders
+                          </label>
+
+                          {draftBreakReminderEnabled && (
+                            <label className="grid gap-1.5 text-sm font-medium" htmlFor="break-interval">
+                              Remind after (minutes)
+                              <Input
+                                id="break-interval"
+                                type="number"
+                                min={5}
+                                max={480}
+                                value={draftBreakReminderInterval}
+                                onChange={(e) => setDraftBreakReminderInterval(e.target.value)}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="app-limits">
+                        <AppLimitsSettings
+                          limits={appLimits}
+                          onUpsert={async (limit) => {
+                            const updated = await window.arkwatch.appLimits.upsert(limit);
+                            setAppLimits(updated);
+                          }}
+                          onRemove={async (id) => {
+                            const updated = await window.arkwatch.appLimits.remove(id);
+                            setAppLimits(updated);
+                          }}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="focus-schedule">
+                        <FocusScheduleSettings
+                          schedules={focusSchedules}
+                          onCreate={async (schedule) => {
+                            const updated = await window.arkwatch.focusSchedules.create(schedule);
+                            setFocusSchedules(updated);
+                          }}
+                          onUpdate={async (schedule) => {
+                            const updated = await window.arkwatch.focusSchedules.update(schedule);
+                            setFocusSchedules(updated);
+                          }}
+                          onRemove={async (id) => {
+                            const updated = await window.arkwatch.focusSchedules.remove(id);
+                            setFocusSchedules(updated);
+                          }}
+                        />
+                      </TabsContent>
+
+                    </Tabs>
 
                     <DialogFooter>
                       <Button variant="ghost" onClick={() => setSettingsOpen(false)}>Cancel</Button>
@@ -653,6 +693,22 @@ export const App = (): React.JSX.Element => {
                 />
               </div>
             </section>
+
+            {/* Focus Mode */}
+            <FocusWidget
+              focusState={focusState}
+              todayCount={focusTodayCount}
+              onStart={async (durationSec) => {
+                const state = await window.arkwatch.focus.start({ durationSec });
+                setFocusState(state);
+              }}
+              onStop={async () => {
+                const state = await window.arkwatch.focus.stop();
+                setFocusState(state);
+                const count = await window.arkwatch.focus.getTodayCount();
+                setFocusTodayCount(count);
+              }}
+            />
 
             {/* Stats + Radial */}
             <div className="cv-section grid gap-4 lg:grid-cols-3">
@@ -720,3 +776,4 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+

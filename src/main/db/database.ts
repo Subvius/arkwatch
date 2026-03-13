@@ -2,7 +2,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { Database, open } from 'sqlite';
 import sqlite3 from 'sqlite3';
-import type { AIToolDailyStat, AppSettings, DateRange, SessionInput, SummaryStats, TopAppStat } from '../../shared/types';
+import type { AIToolDailyStat, AppLimit, AppLimitStatus, AppSettings, DateRange, FocusSchedule, FocusSessionRecord, SessionInput, SummaryStats, TopAppStat } from '../../shared/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   idleThresholdSeconds: 300,
@@ -11,7 +11,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   dailyGoalHours: 8,
   minimizeToTray: true,
   dailyGoalNotification: true,
-  autoCheckUpdates: true
+  autoCheckUpdates: true,
+  breakReminderEnabled: true,
+  breakReminderIntervalMinutes: 90
 };
 
 type AIToolId = 'claude' | 'codex';
@@ -68,6 +70,36 @@ export class ArkWatchDatabase {
         key TEXT PRIMARY KEY,
         value_json TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS app_limits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        app_name TEXT NOT NULL,
+        exe_path TEXT,
+        daily_limit_seconds INTEGER NOT NULL CHECK(daily_limit_seconds > 0),
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        UNIQUE(app_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS focus_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        planned_duration_sec INTEGER NOT NULL,
+        actual_duration_sec INTEGER,
+        completed INTEGER NOT NULL DEFAULT 0,
+        label TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS focus_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL,
+        days_of_week TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
       );
     `);
 
@@ -138,6 +170,14 @@ export class ArkWatchDatabase {
 
       if (row.key === 'autoCheckUpdates' && typeof parsed === 'boolean') {
         values.autoCheckUpdates = parsed;
+      }
+
+      if (row.key === 'breakReminderEnabled' && typeof parsed === 'boolean') {
+        values.breakReminderEnabled = parsed;
+      }
+
+      if (row.key === 'breakReminderIntervalMinutes' && typeof parsed === 'number') {
+        values.breakReminderIntervalMinutes = Math.max(5, Math.min(480, Math.floor(parsed)));
       }
     }
 
@@ -230,6 +270,31 @@ export class ArkWatchDatabase {
         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
         `,
         JSON.stringify(next.autoCheckUpdates),
+        now
+      );
+    }
+
+    if (typeof next.breakReminderEnabled === 'boolean') {
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('breakReminderEnabled', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(next.breakReminderEnabled),
+        now
+      );
+    }
+
+    if (typeof next.breakReminderIntervalMinutes === 'number') {
+      const breakReminderIntervalMinutes = Math.max(5, Math.min(480, Math.floor(next.breakReminderIntervalMinutes)));
+      await db.run(
+        `
+        INSERT INTO settings (key, value_json, updated_at)
+        VALUES ('breakReminderIntervalMinutes', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+        `,
+        JSON.stringify(breakReminderIntervalMinutes),
         now
       );
     }
@@ -415,6 +480,116 @@ export class ArkWatchDatabase {
     return AI_TOOLS.map((tool) => stats[tool.id]);
   }
 
+  // --- App Limits ---
+
+  async getAppLimits(): Promise<AppLimit[]> {
+    const db = this.requireDb();
+    const rows = await db.all<{
+      id: number; app_name: string; exe_path: string | null;
+      daily_limit_seconds: number; enabled: number; created_at: string;
+    }[]>(`SELECT * FROM app_limits ORDER BY app_name`);
+    return rows.map((r) => ({
+      id: r.id, appName: r.app_name, exePath: r.exe_path,
+      dailyLimitSeconds: r.daily_limit_seconds, enabled: r.enabled === 1,
+      createdAt: r.created_at
+    }));
+  }
+
+  async upsertAppLimit(limit: { appName: string; exePath: string | null; dailyLimitSeconds: number; enabled: boolean }): Promise<void> {
+    const db = this.requireDb();
+    await db.run(
+      `INSERT INTO app_limits (app_name, exe_path, daily_limit_seconds, enabled, created_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(app_name) DO UPDATE SET exe_path = excluded.exe_path, daily_limit_seconds = excluded.daily_limit_seconds, enabled = excluded.enabled`,
+      limit.appName, limit.exePath, limit.dailyLimitSeconds, limit.enabled ? 1 : 0, new Date().toISOString()
+    );
+  }
+
+  async removeAppLimit(id: number): Promise<void> {
+    const db = this.requireDb();
+    await db.run(`DELETE FROM app_limits WHERE id = ?`, id);
+  }
+
+  async getAppUsageToday(appName: string): Promise<number> {
+    const db = this.requireDb();
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+    const row = await db.get<{ total: number }>(
+      `SELECT COALESCE(SUM(duration_sec), 0) AS total FROM sessions
+       WHERE app_name = ? AND started_at >= ? AND started_at <= ? AND is_idle_segment = 0 AND source != 'background-process'`,
+      appName, from, to
+    );
+    return row?.total ?? 0;
+  }
+
+  // --- Focus Sessions ---
+
+  async insertFocusSession(session: { startedAt: string; plannedDurationSec: number; label: string | null }): Promise<number> {
+    const db = this.requireDb();
+    const result = await db.run(
+      `INSERT INTO focus_sessions (started_at, planned_duration_sec, label) VALUES (?, ?, ?)`,
+      session.startedAt, session.plannedDurationSec, session.label
+    );
+    return result.lastID!;
+  }
+
+  async updateFocusSession(id: number, update: { endedAt: string; actualDurationSec: number; completed: boolean }): Promise<void> {
+    const db = this.requireDb();
+    await db.run(
+      `UPDATE focus_sessions SET ended_at = ?, actual_duration_sec = ?, completed = ? WHERE id = ?`,
+      update.endedAt, update.actualDurationSec, update.completed ? 1 : 0, id
+    );
+  }
+
+  async getTodayFocusSessionCount(): Promise<number> {
+    const db = this.requireDb();
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+    const row = await db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM focus_sessions WHERE started_at >= ? AND started_at <= ? AND completed = 1`,
+      from, to
+    );
+    return row?.count ?? 0;
+  }
+
+  // --- Focus Schedules ---
+
+  async getFocusSchedules(): Promise<FocusSchedule[]> {
+    const db = this.requireDb();
+    const rows = await db.all<{
+      id: number; label: string; days_of_week: string;
+      start_time: string; end_time: string; enabled: number; created_at: string;
+    }[]>(`SELECT * FROM focus_schedules ORDER BY start_time`);
+    return rows.map((r) => ({
+      id: r.id, label: r.label, daysOfWeek: r.days_of_week,
+      startTime: r.start_time, endTime: r.end_time, enabled: r.enabled === 1,
+      createdAt: r.created_at
+    }));
+  }
+
+  async createFocusSchedule(schedule: { label: string; daysOfWeek: string; startTime: string; endTime: string; enabled: boolean }): Promise<void> {
+    const db = this.requireDb();
+    await db.run(
+      `INSERT INTO focus_schedules (label, days_of_week, start_time, end_time, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      schedule.label, schedule.daysOfWeek, schedule.startTime, schedule.endTime, schedule.enabled ? 1 : 0, new Date().toISOString()
+    );
+  }
+
+  async updateFocusSchedule(schedule: FocusSchedule): Promise<void> {
+    const db = this.requireDb();
+    await db.run(
+      `UPDATE focus_schedules SET label = ?, days_of_week = ?, start_time = ?, end_time = ?, enabled = ? WHERE id = ?`,
+      schedule.label, schedule.daysOfWeek, schedule.startTime, schedule.endTime, schedule.enabled ? 1 : 0, schedule.id
+    );
+  }
+
+  async removeFocusSchedule(id: number): Promise<void> {
+    const db = this.requireDb();
+    await db.run(`DELETE FROM focus_schedules WHERE id = ?`, id);
+  }
+
   private async ensureDefaultSettings(): Promise<void> {
     const db = this.requireDb();
     const now = new Date().toISOString();
@@ -479,6 +654,24 @@ export class ArkWatchDatabase {
       VALUES ('autoCheckUpdates', ?, ?)
       `,
       JSON.stringify(DEFAULT_SETTINGS.autoCheckUpdates),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('breakReminderEnabled', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.breakReminderEnabled),
+      now
+    );
+
+    await db.run(
+      `
+      INSERT OR IGNORE INTO settings (key, value_json, updated_at)
+      VALUES ('breakReminderIntervalMinutes', ?, ?)
+      `,
+      JSON.stringify(DEFAULT_SETTINGS.breakReminderIntervalMinutes),
       now
     );
   }

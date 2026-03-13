@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import type { AppSettings, DateRange } from '../shared/types';
+import type { AppSettings, DateRange, FocusSchedule } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
 import { IPC_CHANNELS } from '../shared/ipc';
 import { scanBackgroundProcesses } from './tracker/process-scanner';
+import { FocusService } from './focus/focus-service';
+import { AppLimitChecker } from './focus/app-limit-checker';
 
 const iconByRequestKey = new Map<string, string | null>();
 const iconByCandidatePath = new Map<string, string | null>();
@@ -153,7 +155,9 @@ export const registerIpcHandlers = (
   database: ArkWatchDatabase,
   tracker: ActivityTrackerService,
   onSettingsUpdated: (settings: AppSettings) => Promise<void>,
-  onTrackerStatusChanged: () => void
+  onTrackerStatusChanged: () => void,
+  focusService?: FocusService,
+  appLimitChecker?: AppLimitChecker
 ): void => {
   ipcMain.handle(IPC_CHANNELS.trackerGetStatus, () => {
     return tracker.getStatus();
@@ -275,6 +279,64 @@ export const registerIpcHandlers = (
       return null;
     }
   );
+
+  // --- Focus ---
+  ipcMain.handle(IPC_CHANNELS.focusGetState, () => {
+    return focusService?.getState() ?? { active: false, remainingSeconds: 0, plannedDurationSec: 0, elapsedSeconds: 0, label: null };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusStart, async (_event, params: { durationSec: number; label?: string }) => {
+    if (!focusService) throw new Error('Focus service not available');
+    return focusService.start(params.durationSec, params.label);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusStop, async () => {
+    if (!focusService) throw new Error('Focus service not available');
+    return focusService.stop();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusGetTodayCount, async () => {
+    return focusService?.getTodayCount() ?? 0;
+  });
+
+  // --- App Limits ---
+  ipcMain.handle(IPC_CHANNELS.appLimitsGetAll, async () => {
+    return database.getAppLimits();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appLimitsUpsert, async (_event, limit: { appName: string; exePath: string | null; dailyLimitSeconds: number; enabled: boolean }) => {
+    await database.upsertAppLimit(limit);
+    return database.getAppLimits();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appLimitsRemove, async (_event, id: number) => {
+    await database.removeAppLimit(id);
+    return database.getAppLimits();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appLimitsGetStatuses, async () => {
+    return appLimitChecker?.getStatuses() ?? [];
+  });
+
+  // --- Focus Schedules ---
+  ipcMain.handle(IPC_CHANNELS.focusSchedulesGetAll, async () => {
+    return database.getFocusSchedules();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusSchedulesCreate, async (_event, schedule: { label: string; daysOfWeek: string; startTime: string; endTime: string; enabled: boolean }) => {
+    await database.createFocusSchedule(schedule);
+    return database.getFocusSchedules();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusSchedulesUpdate, async (_event, schedule: FocusSchedule) => {
+    await database.updateFocusSchedule(schedule);
+    return database.getFocusSchedules();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.focusSchedulesRemove, async (_event, id: number) => {
+    await database.removeFocusSchedule(id);
+    return database.getFocusSchedules();
+  });
 
   ipcMain.on(IPC_CHANNELS.windowMinimize, (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize();
