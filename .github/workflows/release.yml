@@ -36,8 +36,17 @@ jobs:
         run: |
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $expected = "v$($pkg.version)"
-          if ("${{ github.ref_name }}" -ne $expected) {
-            throw "Tag '${{ github.ref_name }}' does not match package.json version '$expected'"
+          $refName = "${{ github.ref_name }}"
+          $fullRef = "${{ github.ref }}"
+          $tag = if ($refName -like 'refs/tags/*') {
+            $refName.Substring(10)
+          } elseif ($fullRef -like 'refs/tags/*') {
+            $fullRef.Substring(10)
+          } else {
+            $refName
+          }
+          if ($tag -ne $expected) {
+            throw "Tag '$tag' does not match package.json version '$expected'"
           }
 
       - name: Build and publish release
