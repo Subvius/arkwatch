@@ -1,6 +1,6 @@
 {
   "name": "arkwatch",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Windows 11 screen-time tracker with local SQLite storage",
   "main": "out/main/index.js",
   "type": "module",

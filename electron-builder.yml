@@ -27,5 +27,6 @@ publish:
   provider: github
   owner: Subvius
   repo: arkwatch
+  releaseType: release
 
 
