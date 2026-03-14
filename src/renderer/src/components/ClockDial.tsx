@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
+import { AnimatedNumber } from './AnimatedNumber';
 
 type ClockDialProps = {
   open: boolean;
@@ -13,9 +14,9 @@ const CX = SIZE / 2;
 const CY = SIZE / 2;
 const RADIUS = 80;
 const HANDLE_RADIUS = 10;
-const MIN_MINUTES = 5;
+const MIN_MINUTES = 1;
 const MAX_MINUTES = 180;
-const SNAP = 5;
+const SNAP = 1;
 
 const angleToMinutes = (angle: number): number => {
   // angle 0 = 12 o'clock, clockwise
@@ -85,71 +86,56 @@ export const ClockDial = ({ open, onOpenChange, onStart }: ClockDialProps): Reac
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-2">
-          <svg
-            ref={svgRef}
-            width={SIZE}
-            height={SIZE}
-            viewBox={`0 0 ${SIZE} ${SIZE}`}
-            className="select-none"
-          >
-            {/* Track */}
-            <circle
-              cx={CX}
-              cy={CY}
-              r={RADIUS}
-              fill="none"
-              stroke="hsl(var(--border))"
-              strokeWidth={8}
-              strokeLinecap="round"
-            />
-
-            {/* Filled arc */}
-            {minutes > 0 && (
-              <path
-                d={describeArc(0, angle)}
+          <div className="relative h-[200px] w-[200px]">
+            <svg
+              ref={svgRef}
+              width={SIZE}
+              height={SIZE}
+              viewBox={`0 0 ${SIZE} ${SIZE}`}
+              className="select-none"
+            >
+              <circle
+                cx={CX}
+                cy={CY}
+                r={RADIUS}
                 fill="none"
-                stroke="hsl(var(--accent))"
+                stroke="hsl(var(--border))"
                 strokeWidth={8}
                 strokeLinecap="round"
               />
-            )}
 
-            {/* Handle */}
-            <circle
-              cx={handlePos.x}
-              cy={handlePos.y}
-              r={HANDLE_RADIUS}
-              fill="hsl(var(--accent))"
-              stroke="hsl(var(--panel))"
-              strokeWidth={3}
-              className="cursor-grab active:cursor-grabbing"
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-            />
+              {minutes > 0 && (
+                <path
+                  d={describeArc(0, angle)}
+                  fill="none"
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={8}
+                  strokeLinecap="round"
+                />
+              )}
 
-            {/* Center text */}
-            <text
-              x={CX}
-              y={CY - 6}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="fill-[hsl(var(--ink))] text-2xl font-bold"
-              style={{ fontSize: 28, fontWeight: 700 }}
-            >
-              {minutes}
-            </text>
-            <text
-              x={CX}
-              y={CY + 16}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="fill-[hsl(var(--muted))] text-xs"
-              style={{ fontSize: 12 }}
-            >
-              min
-            </text>
-          </svg>
+              <circle
+                cx={handlePos.x}
+                cy={handlePos.y}
+                r={HANDLE_RADIUS}
+                fill="hsl(var(--accent))"
+                stroke="hsl(var(--panel))"
+                strokeWidth={3}
+                className="cursor-grab active:cursor-grabbing"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+            </svg>
+
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold text-[hsl(var(--ink))]">
+                <AnimatedNumber value={minutes} springOptions={{ stiffness: 260, damping: 24 }} />
+              </span>
+              <span className="text-xs text-[hsl(var(--muted))]">min</span>
+            </div>
+          </div>
 
           <Button
             className="w-full"
