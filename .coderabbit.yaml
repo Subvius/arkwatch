@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"
+  high_level_summary: true
+  review_status: true
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - master
+      - main
+  path_filters:
+    - "!node_modules/**"
+    - "!out/**"
+    - "!release/**"
+    - "!runlogs/**"
+    - "!build/**"
+  path_instructions:
+    - path: "src/main/**"
+      instructions: |
+        Focus on Electron main-process correctness.
+        Check IPC safety, timer cleanup, shutdown behavior, updater behavior, and any background work that can leak resources or block app exit.
+    - path: "src/preload/**"
+      instructions: |
+        Focus on API surface safety.
+        Flag any preload exposure that widens renderer privileges, weakens context isolation assumptions, or breaks type/IPC contract symmetry.
+    - path: "src/renderer/**"
+      instructions: |
+        Focus on user-visible regressions, async effect cleanup, polling frequency, and state synchronization with the main process.
+        Call out unnecessary rerenders, stale state, and cleanup mistakes.
+    - path: "tests/**"
+      instructions: |
+        Focus on deterministic behavior, edge cases, and regression coverage.
+        Flag tests that miss cleanup, rely on timing too heavily, or fail to cover error paths.
+    - path: ".github/workflows/**"
+      instructions: |
+        Focus on CI reliability for a Windows-first Bun/Electron app.
+        Flag steps that are likely to be flaky, too permissive, or inconsistent with the release process.
+
+chat:
+  auto_reply: true
