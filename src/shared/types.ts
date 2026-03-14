@@ -113,6 +113,12 @@ export type AIToolProcess = {
   running: boolean;
 };
 
+export type ManualUpdateCheckResult =
+  | { status: 'available'; version: string }
+  | { status: 'not-available'; version: string }
+  | { status: 'unavailable'; reason: string }
+  | { status: 'error'; message: string };
+
 export type ArkWatchApi = {
   tracker: {
     getStatus: () => Promise<TrackerStatus>;
@@ -160,6 +166,7 @@ export type ArkWatchApi = {
     onNotify: (callback: () => void) => () => void;
   };
   updater: {
+    checkNow: () => Promise<ManualUpdateCheckResult>;
     onDownloadProgress: (callback: (progress: ProgressInfo) => void) => () => void;
   };
   window: {
@@ -169,3 +176,4 @@ export type ArkWatchApi = {
     onRestoredFromTray: (callback: () => void) => () => void;
   };
 };
+

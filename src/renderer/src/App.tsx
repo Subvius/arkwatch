@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { endOfDay, format, startOfDay, subDays } from 'date-fns';
-import { PauseCircle, PlayCircle, Settings } from 'lucide-react';
+import { PauseCircle, PlayCircle, RefreshCw, Settings } from 'lucide-react';
 import githubLogo from './assets/github-dark-logo.svg';
-import type { AIToolDailyStat, AIToolProcess, AppLimit, AppSettings, FocusSchedule, FocusSessionState, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo, ThemeSetting } from '../../shared/types';
+import type { AIToolDailyStat, AIToolProcess, AppLimit, AppSettings, FocusSchedule, FocusSessionState, ManualUpdateCheckResult, SummaryStats, TopAppStat, TrackerStatus, ProgressInfo, ThemeSetting } from '../../shared/types';
 import { formatDuration } from './lib/utils';
 import { getAITools, type AIToolId } from './lib/ai-tools';
 import { Button } from './components/ui/button';
@@ -146,6 +146,8 @@ export const App = (): React.JSX.Element => {
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
   const [isMedicMode, setIsMedicMode] = React.useState(false);
   const [updateDownloadProgress, setUpdateDownloadProgress] = React.useState<ProgressInfo | null>(null);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = React.useState(false);
+  const [updateCheckMessage, setUpdateCheckMessage] = React.useState<string | null>(null);
   const updatesDisabledInDev = window.location.protocol === 'http:';
   const medicTimerRef = React.useRef<number | null>(null);
   const lastIdleStateRef = React.useRef(false);
@@ -305,6 +307,34 @@ export const App = (): React.JSX.Element => {
     setStatus(next);
     await loadData();
     await loadAIStats();
+  };
+
+  const formatUpdateCheckMessage = (result: ManualUpdateCheckResult): string => {
+    switch (result.status) {
+      case 'available':
+        return `Update ${result.version} found. Download started in the background.`;
+      case 'not-available':
+        return `You're already on the latest available version (${result.version}).`;
+      case 'unavailable':
+        return `Update checks are unavailable: ${result.reason}.`;
+      case 'error':
+        return `Update check failed: ${result.message}`;
+    }
+  };
+
+  const checkForUpdates = async (): Promise<void> => {
+    setIsCheckingForUpdates(true);
+    setUpdateCheckMessage(null);
+
+    try {
+      const result = await window.arkwatch.updater.checkNow();
+      setUpdateCheckMessage(formatUpdateCheckMessage(result));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown update error';
+      setUpdateCheckMessage(`Update check failed: ${message}`);
+    } finally {
+      setIsCheckingForUpdates(false);
+    }
   };
 
   const saveSettings = async (): Promise<void> => {
@@ -525,6 +555,9 @@ export const App = (): React.JSX.Element => {
 
                 <Dialog open={settingsOpen} onOpenChange={(open) => {
                   setSettingsOpen(open);
+                  if (!open) {
+                    setUpdateCheckMessage(null);
+                  }
                   if (open) {
                     setSettingsTab('general');
                     setDraftIdle(String(settings.idleThresholdSeconds));
@@ -634,6 +667,28 @@ export const App = (): React.JSX.Element => {
                             />
                             {updatesDisabledInDev ? 'Auto-check for updates (disabled in dev)' : 'Auto-check for updates'}
                           </label>
+
+                          <div className="grid gap-2 rounded-lg border border-[hsl(var(--border))] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="space-y-0.5">
+                                <p className="text-sm font-medium">Check for updates</p>
+                                <p className="text-xs text-[hsl(var(--muted))]">Run a manual update check and get direct feedback.</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void checkForUpdates()}
+                                disabled={updatesDisabledInDev || isCheckingForUpdates}
+                              >
+                                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isCheckingForUpdates ? 'animate-spin' : ''}`} />
+                                {isCheckingForUpdates ? 'Checking...' : 'Check now'}
+                              </Button>
+                            </div>
+                            <p className="text-xs text-[hsl(var(--muted))]">
+                              {updatesDisabledInDev ? 'Manual checks are disabled in development builds.' : updateCheckMessage ?? 'Use this even if automatic checks are turned off.'}
+                            </p>
+                          </div>
 
                           <div className="h-px bg-[hsl(var(--border))]" />
 

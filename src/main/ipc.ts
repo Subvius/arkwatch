@@ -8,6 +8,7 @@ import { IPC_CHANNELS } from '../shared/ipc';
 import { scanBackgroundProcesses } from './tracker/process-scanner';
 import { FocusService } from './focus/focus-service';
 import { AppLimitChecker } from './focus/app-limit-checker';
+import { checkForUpdatesNow } from './updater';
 
 const iconByRequestKey = new Map<string, string | null>();
 const iconByCandidatePath = new Map<string, string | null>();
@@ -220,6 +221,14 @@ export const registerIpcHandlers = (
     return updated;
   });
 
+  ipcMain.handle(IPC_CHANNELS.updaterCheckNow, async () => {
+    if (!getMainWindow) {
+      return { status: 'unavailable', reason: 'Main window is not available.' } as const;
+    }
+
+    return checkForUpdatesNow(getMainWindow);
+  });
+
   ipcMain.handle(IPC_CHANNELS.processesGetAITools, async () => {
     const processes = await scanBackgroundProcesses();
     return Array.from(processes.entries()).map(([id, info]) => ({
@@ -369,3 +378,4 @@ export const registerIpcHandlers = (
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 };
+
