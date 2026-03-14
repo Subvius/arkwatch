@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ArkWatchApi, AppLimit, AppSettings, DateRange, FocusSchedule, FocusSessionState, AppLimitStatus, ProgressInfo } from '../shared/types';
+import type { ArkWatchApi, AppLimit, AppSettings, DateRange, FocusSchedule, FocusSessionState, AppLimitStatus, ProgressInfo, TrackerStatus } from '../shared/types';
 import { IPC_CHANNELS } from '../shared/ipc';
 
 const api: ArkWatchApi = {
@@ -7,7 +7,12 @@ const api: ArkWatchApi = {
     getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.trackerGetStatus),
     pause: () => ipcRenderer.invoke(IPC_CHANNELS.trackerPause),
     resume: () => ipcRenderer.invoke(IPC_CHANNELS.trackerResume),
-    toggle: () => ipcRenderer.invoke(IPC_CHANNELS.trackerToggle)
+    toggle: () => ipcRenderer.invoke(IPC_CHANNELS.trackerToggle),
+    onStatusChanged: (callback: (status: TrackerStatus) => void) => {
+      const handler = (_event: unknown, status: TrackerStatus) => callback(status);
+      ipcRenderer.on(IPC_CHANNELS.trackerStatusChanged, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.trackerStatusChanged, handler); };
+    }
   },
   stats: {
     getSummary: (range: DateRange) => ipcRenderer.invoke(IPC_CHANNELS.statsGetSummary, range),
@@ -79,4 +84,5 @@ const api: ArkWatchApi = {
 };
 
 contextBridge.exposeInMainWorld('arkwatch', api);
+
 

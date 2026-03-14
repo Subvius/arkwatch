@@ -242,21 +242,16 @@ export const App = (): React.JSX.Element => {
         setDataLoaded(true);
       });
 
-    const statusTimer = window.setInterval(() => {
-      void loadStatus();
-    }, 1000);
-
     const dataTimer = window.setInterval(() => {
       void loadData();
       void loadAIStats();
-    }, 10_000);
+    }, 30_000);
 
     const processTimer = window.setInterval(() => {
       void loadProcesses();
-    }, 5_000);
+    }, 15_000);
 
     return () => {
-      window.clearInterval(statusTimer);
       window.clearInterval(dataTimer);
       window.clearInterval(processTimer);
     };
@@ -319,8 +314,35 @@ export const App = (): React.JSX.Element => {
   React.useEffect(() => {
     return window.arkwatch.window.onRestoredFromTray(() => {
       elephantRef.current?.triggerGreeting();
+      void loadData();
+      void loadAIStats();
+      void loadProcesses();
+    });
+  }, [loadAIStats, loadData, loadProcesses]);
+
+  React.useEffect(() => {
+    return window.arkwatch.tracker.onStatusChanged((next) => {
+      setStatus((prev) => {
+        if (prev.currentApp !== next.currentApp && prev.currentApp !== null) {
+          prevAppRef.current = prev.currentApp;
+        }
+        return next;
+      });
     });
   }, []);
+
+  React.useEffect(() => {
+    const refresh = (): void => {
+      void loadData();
+      void loadAIStats();
+      void loadProcesses();
+    };
+
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadAIStats, loadData, loadProcesses]);
 
   React.useEffect(() => {
     return window.arkwatch.focus.onStateChanged((state) => {

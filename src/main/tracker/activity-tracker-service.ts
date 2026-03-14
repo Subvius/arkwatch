@@ -29,9 +29,18 @@ const isTerminalApp = (app: ActiveApp): boolean => {
 
 export type ClaudeRunningProvider = () => ActiveApp | null;
 
+const hasTrackerStatusChanged = (previous: TrackerStatus, next: TrackerStatus): boolean => (
+  previous.running !== next.running ||
+  previous.paused !== next.paused ||
+  previous.idle !== next.idle ||
+  previous.currentApp !== next.currentApp ||
+  previous.idleSeconds !== next.idleSeconds
+);
+
 export class ActivityTrackerService {
   private intervalId: NodeJS.Timeout | null = null;
   private readonly core: ActivityTrackerCore;
+  private readonly statusListeners = new Set<(status: TrackerStatus) => void>();
 
   constructor(
     private readonly source: ActivitySource,
@@ -49,11 +58,14 @@ export class ActivityTrackerService {
     this.core.start();
 
     this.source.onSuspend(() => {
-      void this.core.onSuspend(new Date());
+      void this.core.onSuspend(new Date()).then(() => {
+        this.emitStatusChanged();
+      });
     });
 
     this.source.onResume(() => {
       this.core.onResume();
+      this.emitStatusChanged();
     });
 
     this.intervalId = setInterval(() => {
@@ -74,13 +86,17 @@ export class ActivityTrackerService {
 
   async pause(): Promise<TrackerStatus> {
     await this.core.pause(new Date());
-    return this.core.getStatus();
+    const status = this.core.getStatus();
+    this.emitStatusChanged(status);
+    return status;
   }
 
   async resume(): Promise<TrackerStatus> {
     this.core.resume();
     await this.pollOnce();
-    return this.core.getStatus();
+    const status = this.core.getStatus();
+    this.emitStatusChanged(status);
+    return status;
   }
 
   async toggle(): Promise<TrackerStatus> {
@@ -94,6 +110,13 @@ export class ActivityTrackerService {
 
   getStatus(): TrackerStatus {
     return this.core.getStatus();
+  }
+
+  onStatusChanged(listener: (status: TrackerStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
   }
 
   setIdleThreshold(seconds: number): void {
@@ -118,7 +141,19 @@ export class ActivityTrackerService {
       }
     }
 
+    const previousStatus = this.core.getStatus();
     await this.core.tick(new Date(), app, idleSeconds);
+
+    const nextStatus = this.core.getStatus();
+    if (hasTrackerStatusChanged(previousStatus, nextStatus)) {
+      this.emitStatusChanged(nextStatus);
+    }
+  }
+
+  private emitStatusChanged(status = this.core.getStatus()): void {
+    for (const listener of this.statusListeners) {
+      listener(status);
+    }
   }
 }
 

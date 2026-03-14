@@ -289,7 +289,7 @@ const bootstrap = async (): Promise<void> => {
     syncAutoUpdater(nextSettings);
   }, () => {
     refreshTrayMenu?.();
-  }, focusService, appLimitChecker);
+  }, getMainWindow, focusService, appLimitChecker);
 
   mainWindow = createWindow();
 

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import type { AppSettings, DateRange, FocusSchedule } from '../shared/types';
+import type { AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
 import { IPC_CHANNELS } from '../shared/ipc';
@@ -156,6 +156,7 @@ export const registerIpcHandlers = (
   tracker: ActivityTrackerService,
   onSettingsUpdated: (settings: AppSettings) => Promise<void>,
   onTrackerStatusChanged: () => void,
+  getMainWindow?: () => BrowserWindow | null,
   focusService?: FocusService,
   appLimitChecker?: AppLimitChecker
 ): void => {
@@ -164,21 +165,34 @@ export const registerIpcHandlers = (
   });
 
   ipcMain.handle(IPC_CHANNELS.trackerPause, async () => {
-    const status = await tracker.pause();
-    onTrackerStatusChanged();
-    return status;
+    return tracker.pause();
   });
 
   ipcMain.handle(IPC_CHANNELS.trackerResume, async () => {
-    const status = await tracker.resume();
-    onTrackerStatusChanged();
-    return status;
+    return tracker.resume();
   });
 
   ipcMain.handle(IPC_CHANNELS.trackerToggle, async () => {
-    const status = await tracker.toggle();
+    return tracker.toggle();
+  });
+
+  const sendTrackerStatus = (status: TrackerStatus): void => {
     onTrackerStatusChanged();
-    return status;
+
+    if (!getMainWindow) {
+      return;
+    }
+
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    mainWindow.webContents.send(IPC_CHANNELS.trackerStatusChanged, status);
+  };
+
+  tracker.onStatusChanged((status) => {
+    sendTrackerStatus(status);
   });
 
   ipcMain.handle(IPC_CHANNELS.statsGetSummary, (_event, range: DateRange) => {

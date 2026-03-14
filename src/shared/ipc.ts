@@ -3,6 +3,7 @@ export const IPC_CHANNELS = {
   trackerPause: 'tracker.pause',
   trackerResume: 'tracker.resume',
   trackerToggle: 'tracker.toggle',
+  trackerStatusChanged: 'tracker.statusChanged',
   statsGetSummary: 'stats.getSummary',
   statsGetTopApps: 'stats.getTopApps',
   statsGetAIToolDailyStats: 'stats.getAIToolDailyStats',
