@@ -17,12 +17,17 @@ const HANDLE_RADIUS = 10;
 const MIN_MINUTES = 1;
 const MAX_MINUTES = 180;
 const SNAP = 1;
+const KEYBOARD_LARGE_STEP = 15;
+
+const clampMinutes = (minutes: number): number => {
+  return Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, minutes));
+};
 
 const angleToMinutes = (angle: number): number => {
   // angle 0 = 12 o'clock, clockwise
   const raw = (angle / (2 * Math.PI)) * MAX_MINUTES;
   const snapped = Math.round(raw / SNAP) * SNAP;
-  return Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, snapped));
+  return clampMinutes(snapped);
 };
 
 const minutesToAngle = (minutes: number): number => {
@@ -47,9 +52,14 @@ export const ClockDial = ({ open, onOpenChange, onStart }: ClockDialProps): Reac
   const [minutes, setMinutes] = React.useState(25);
   const [dragging, setDragging] = React.useState(false);
   const svgRef = React.useRef<SVGSVGElement>(null);
+  const sliderId = React.useId();
 
   const angle = minutesToAngle(minutes);
   const handlePos = polarToCartesian(angle);
+
+  const applyMinutes = React.useCallback((nextMinutes: number) => {
+    setMinutes(clampMinutes(nextMinutes));
+  }, []);
 
   const getAngleFromEvent = React.useCallback((clientX: number, clientY: number): number => {
     const svg = svgRef.current;
@@ -62,21 +72,61 @@ export const ClockDial = ({ open, onOpenChange, onStart }: ClockDialProps): Reac
     return a;
   }, []);
 
+  const updateMinutesFromAngle = React.useCallback((nextAngle: number) => {
+    applyMinutes(angleToMinutes(nextAngle));
+  }, [applyMinutes]);
+
   const handlePointerDown = React.useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     setDragging(true);
     (e.target as Element).setPointerCapture(e.pointerId);
-  }, []);
+    updateMinutesFromAngle(getAngleFromEvent(e.clientX, e.clientY));
+  }, [getAngleFromEvent, updateMinutesFromAngle]);
 
   const handlePointerMove = React.useCallback((e: React.PointerEvent) => {
     if (!dragging) return;
-    const a = getAngleFromEvent(e.clientX, e.clientY);
-    setMinutes(angleToMinutes(a));
-  }, [dragging, getAngleFromEvent]);
+    updateMinutesFromAngle(getAngleFromEvent(e.clientX, e.clientY));
+  }, [dragging, getAngleFromEvent, updateMinutesFromAngle]);
 
   const handlePointerUp = React.useCallback(() => {
     setDragging(false);
   }, []);
+
+  const handleSliderChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    applyMinutes(Number(e.target.value));
+  }, [applyMinutes]);
+
+  const handleSliderKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    let nextMinutes = minutes;
+
+    switch (e.key) {
+      case 'ArrowUp':
+      case 'ArrowRight':
+        nextMinutes = minutes + SNAP;
+        break;
+      case 'ArrowDown':
+      case 'ArrowLeft':
+        nextMinutes = minutes - SNAP;
+        break;
+      case 'PageUp':
+        nextMinutes = minutes + KEYBOARD_LARGE_STEP;
+        break;
+      case 'PageDown':
+        nextMinutes = minutes - KEYBOARD_LARGE_STEP;
+        break;
+      case 'Home':
+        nextMinutes = MIN_MINUTES;
+        break;
+      case 'End':
+        nextMinutes = MAX_MINUTES;
+        break;
+      default:
+        return;
+    }
+
+    e.preventDefault();
+    applyMinutes(nextMinutes);
+  }, [applyMinutes, minutes]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -86,9 +136,10 @@ export const ClockDial = ({ open, onOpenChange, onStart }: ClockDialProps): Reac
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-2">
-          <div className="relative h-[200px] w-[200px]">
+          <div className="relative h-[200px] w-[200px] focus-within:rounded-full focus-within:ring-2 focus-within:ring-[hsl(var(--accent))]/60 focus-within:ring-offset-2 focus-within:ring-offset-[hsl(var(--panel))]">
             <svg
               ref={svgRef}
+              aria-hidden="true"
               width={SIZE}
               height={SIZE}
               viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -128,6 +179,25 @@ export const ClockDial = ({ open, onOpenChange, onStart }: ClockDialProps): Reac
                 onPointerCancel={handlePointerUp}
               />
             </svg>
+            <label htmlFor={sliderId} className="sr-only">
+              Focus duration in minutes
+            </label>
+            <input
+              id={sliderId}
+              type="range"
+              min={MIN_MINUTES}
+              max={MAX_MINUTES}
+              step={SNAP}
+              value={minutes}
+              onChange={handleSliderChange}
+              onKeyDown={handleSliderKeyDown}
+              aria-label="Focus duration in minutes"
+              aria-valuemin={MIN_MINUTES}
+              aria-valuemax={MAX_MINUTES}
+              aria-valuenow={minutes}
+              aria-valuetext={`${minutes} minutes`}
+              className="sr-only"
+            />
 
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold text-[hsl(var(--ink))]">

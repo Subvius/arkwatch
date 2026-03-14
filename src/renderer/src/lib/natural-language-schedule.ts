@@ -168,7 +168,7 @@ export const parseNaturalLanguageSchedule = (
   return {
     ok: true,
     value: {
-      daysOfWeek: detectDays(text, startDate),
+      daysOfWeek: detectDays(text, referenceDate),
       startTime: format(startDate, 'HH:mm'),
       endTime: format(endDate, 'HH:mm')
     }

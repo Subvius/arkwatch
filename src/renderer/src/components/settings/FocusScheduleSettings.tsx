@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Calendar, Clock, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, Calendar, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { TextEffect } from '../ui/text-effect';
 import type { FocusSchedule } from '../../../../shared/types';
@@ -11,17 +11,49 @@ import {
 
 type FocusScheduleSettingsProps = {
   schedules: FocusSchedule[];
-  onCreate: (schedule: Omit<FocusSchedule, 'id' | 'createdAt'>) => void;
-  onUpdate: (schedule: FocusSchedule) => void;
+  onCreate: (schedule: Omit<FocusSchedule, 'id' | 'createdAt'>) => void | Promise<void>;
+  onUpdate: (schedule: FocusSchedule) => void | Promise<void>;
   onRemove: (id: number) => void;
+};
+
+const DAY_NAMES: NaturalLanguageSchedule['daysOfWeek'][number][] = [
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sun'
+];
+
+const parseStoredDays = (daysOfWeek: string): NaturalLanguageSchedule['daysOfWeek'] => {
+  return daysOfWeek
+    .split(',')
+    .map((day) => day.trim())
+    .filter((day): day is NaturalLanguageSchedule['daysOfWeek'][number] => DAY_NAMES.includes(day as NaturalLanguageSchedule['daysOfWeek'][number]));
+};
+
+const buildParsedSchedule = (schedule: FocusSchedule): NaturalLanguageSchedule => {
+  return {
+    daysOfWeek: parseStoredDays(schedule.daysOfWeek),
+    startTime: schedule.startTime,
+    endTime: schedule.endTime
+  };
+};
+
+const buildNaturalInput = (schedule: FocusSchedule): string => {
+  return `${schedule.daysOfWeek.replace(/,/g, ', ')} ${schedule.startTime} to ${schedule.endTime}`;
 };
 
 export const FocusScheduleSettings = ({
   schedules,
   onCreate,
+  onUpdate,
   onRemove
 }: FocusScheduleSettingsProps): React.JSX.Element => {
   const [adding, setAdding] = React.useState(false);
+  const [editingSchedule, setEditingSchedule] = React.useState<FocusSchedule | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [label, setLabel] = React.useState('');
 
   const [naturalInput, setNaturalInput] = React.useState('');
@@ -32,10 +64,17 @@ export const FocusScheduleSettings = ({
 
   const naturalInputRef = React.useRef<HTMLInputElement>(null);
   const labelInputRef = React.useRef<HTMLInputElement>(null);
+  const labelInputId = React.useId();
+  const naturalInputId = React.useId();
+  const naturalErrorId = React.useId();
 
   const parsedSummary = parsedSchedule
     ? `${parsedSchedule.daysOfWeek.join(', ')} | ${parsedSchedule.startTime}-${parsedSchedule.endTime}`
     : '';
+
+  const focusLabelInput = React.useCallback(() => {
+    window.setTimeout(() => labelInputRef.current?.focus(), 50);
+  }, []);
 
   const handleNaturalParse = (): void => {
     if (!naturalInput.trim()) return;
@@ -51,7 +90,42 @@ export const FocusScheduleSettings = ({
     setParseVersion((prev) => prev + 1);
   };
 
-  const handleCreate = (): void => {
+  const resetForm = (): void => {
+    setAdding(false);
+    setEditingSchedule(null);
+    setIsSubmitting(false);
+    setLabel('');
+    setNaturalInput('');
+    setNaturalError(null);
+    setParsedSchedule(null);
+    setParseVersion(0);
+  };
+
+  const openCreateForm = React.useCallback(() => {
+    setAdding(true);
+    setEditingSchedule(null);
+    setIsSubmitting(false);
+    setLabel('');
+    setNaturalInput('');
+    setNaturalError(null);
+    setParsedSchedule(null);
+    setParseVersion(0);
+    focusLabelInput();
+  }, [focusLabelInput]);
+
+  const openEditForm = React.useCallback((schedule: FocusSchedule) => {
+    setAdding(true);
+    setEditingSchedule(schedule);
+    setIsSubmitting(false);
+    setLabel(schedule.label);
+    setNaturalInput(buildNaturalInput(schedule));
+    setNaturalError(null);
+    setParsedSchedule(buildParsedSchedule(schedule));
+    setParseVersion((prev) => prev + 1);
+    focusLabelInput();
+  }, [focusLabelInput]);
+
+  const handleCreate = async (): Promise<void> => {
     if (!label.trim()) return;
 
     let schedule = parsedSchedule;
@@ -59,6 +133,7 @@ export const FocusScheduleSettings = ({
       const parsed = parseNaturalLanguageSchedule(naturalInput);
       if (!parsed.ok) {
         setNaturalError(parsed.error);
+        setParsedSchedule(null);
         return;
       }
       schedule = parsed.value;
@@ -67,30 +142,38 @@ export const FocusScheduleSettings = ({
       setParseVersion((prev) => prev + 1);
     }
 
-    onCreate({
+    const scheduleInput: Omit<FocusSchedule, 'id' | 'createdAt'> = {
       label: label.trim(),
       daysOfWeek: schedule.daysOfWeek.join(','),
       startTime: schedule.startTime,
       endTime: schedule.endTime,
-      enabled: true
-    });
+      enabled: editingSchedule?.enabled ?? true
+    };
 
-    resetForm();
-  };
-
-  const resetForm = (): void => {
-    setAdding(false);
-    setLabel('');
-    setNaturalInput('');
     setNaturalError(null);
-    setParsedSchedule(null);
+    setIsSubmitting(true);
+
+    try {
+      if (editingSchedule) {
+        await onUpdate({
+          ...editingSchedule,
+          ...scheduleInput
+        });
+      } else {
+        await onCreate(scheduleInput);
+      }
+      resetForm();
+    } catch (error) {
+      setNaturalError(error instanceof Error ? error.message : 'Could not save schedule.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const canSubmit = label.trim() && naturalInput.trim();
+  const canSubmit = Boolean(label.trim() && naturalInput.trim()) && !isSubmitting;
 
   return (
     <div className="space-y-1">
-      {/* Existing schedules */}
       {schedules.map((schedule) => (
         <div
           key={schedule.id}
@@ -106,16 +189,28 @@ export const FocusScheduleSettings = ({
             <span className="mt-0.5 block text-[11px] leading-tight text-[hsl(var(--muted))]">
               {schedule.daysOfWeek.replace(/,/g, ', ')}
               <span className="mx-1.5 opacity-40">/</span>
-              {schedule.startTime}–{schedule.endTime}
+              {schedule.startTime}-{schedule.endTime}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => onRemove(schedule.id)}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted))] opacity-0 transition-all hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] group-hover:opacity-100"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <button
+              type="button"
+              onClick={() => openEditForm(schedule)}
+              aria-label={`Edit schedule ${schedule.label}`}
+              className="flex h-6 items-center gap-1 rounded-md px-2 text-[11px] text-[hsl(var(--muted))] transition-colors hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onRemove(schedule.id)}
+              aria-label={`Remove schedule ${schedule.label}`}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted))] transition-all hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         </div>
       ))}
 
@@ -128,17 +223,18 @@ export const FocusScheduleSettings = ({
         </div>
       )}
 
-      {/* Add form */}
       {adding && (
         <div className="space-y-3 pt-1">
-          {/* Unified input area */}
           <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--panel))]">
-            {/* Label row */}
             <div className="flex items-center border-b border-[hsl(var(--border))]/60 px-3">
-              <span className="w-16 shrink-0 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]">
+              <label
+                htmlFor={labelInputId}
+                className="w-16 shrink-0 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]"
+              >
                 Label
-              </span>
+              </label>
               <input
+                id={labelInputId}
                 ref={labelInputRef}
                 type="text"
                 placeholder="Morning Focus"
@@ -148,16 +244,21 @@ export const FocusScheduleSettings = ({
               />
             </div>
 
-            {/* Schedule row */}
             <div className="flex items-center px-3">
-              <span className="w-16 shrink-0 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]">
+              <label
+                htmlFor={naturalInputId}
+                className="w-16 shrink-0 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted))]"
+              >
                 When
-              </span>
+              </label>
               <input
+                id={naturalInputId}
                 ref={naturalInputRef}
                 type="text"
                 placeholder="weekdays 9am to 5pm"
                 value={naturalInput}
+                aria-describedby={naturalError ? naturalErrorId : undefined}
+                aria-invalid={naturalError ? true : undefined}
                 onChange={(e) => {
                   setNaturalInput(e.target.value);
                   setNaturalError(null);
@@ -167,7 +268,7 @@ export const FocusScheduleSettings = ({
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     if (parsedSchedule && canSubmit) {
-                      handleCreate();
+                      void handleCreate();
                     } else {
                       handleNaturalParse();
                     }
@@ -199,9 +300,8 @@ export const FocusScheduleSettings = ({
             </div>
           </div>
 
-          {/* Parsed result / error */}
           {naturalError && (
-            <p className="px-1 text-[11px] text-rose-500">
+            <p id={naturalErrorId} className="px-1 text-[11px] text-rose-500">
               {naturalError}
             </p>
           )}
@@ -222,15 +322,16 @@ export const FocusScheduleSettings = ({
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               disabled={!canSubmit}
-              onClick={handleCreate}
+              onClick={() => {
+                void handleCreate();
+              }}
               className="gap-1.5 text-xs"
             >
-              Add Schedule
+              {editingSchedule ? 'Save Changes' : 'Add Schedule'}
             </Button>
             <button
               type="button"
@@ -243,14 +344,10 @@ export const FocusScheduleSettings = ({
         </div>
       )}
 
-      {/* Add button */}
       {!adding && (
         <button
           type="button"
-          onClick={() => {
-            setAdding(true);
-            setTimeout(() => labelInputRef.current?.focus(), 50);
-          }}
+          onClick={openCreateForm}
           className="flex w-full items-center gap-2.5 rounded-lg border border-dashed border-[hsl(var(--border))] px-3 py-2.5 text-[hsl(var(--muted))] transition-all hover:border-[hsl(var(--accent))]/30 hover:bg-[hsl(var(--bg))] hover:text-[hsl(var(--ink))]"
         >
           <div className="flex h-5 w-5 items-center justify-center rounded-md">
