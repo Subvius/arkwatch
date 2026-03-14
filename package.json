@@ -1,6 +1,6 @@
 {
   "name": "arkwatch",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Windows 11 screen-time tracker with local SQLite storage",
   "main": "out/main/index.js",
   "type": "module",
@@ -35,8 +35,7 @@
     "recharts": "^2.15.4",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "tailwind-merge": "^3.5.0",
-    "tar": "^7.5.11"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
@@ -63,9 +62,6 @@
     "sqlite3",
     "esbuild",
     "electron-winstaller"
-  ],
-  "overrides": {
-    "tar": "^6.2.1"
-  }
+  ]
 }
 
