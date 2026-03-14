@@ -81,7 +81,11 @@ export class ActivityTrackerService {
       this.intervalId = null;
     }
 
-    await this.core.stop(new Date());
+    try {
+      await this.core.stop(new Date());
+    } finally {
+      this.statusListeners.clear();
+    }
   }
 
   async pause(): Promise<TrackerStatus> {
@@ -156,4 +160,5 @@ export class ActivityTrackerService {
     }
   }
 }
+
 
