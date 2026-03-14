@@ -46,7 +46,7 @@ const getAppIconPath = (): string | null => {
 };
 
 const getWindowBackgroundColor = (): string => (
-  nativeTheme.shouldUseDarkColors ? '#131520' : '#f3f5fb'
+  nativeTheme.shouldUseDarkColors ? '#181c28' : '#ffffff'
 );
 
 const createWindow = (): BrowserWindow => {
