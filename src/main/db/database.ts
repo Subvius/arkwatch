@@ -36,6 +36,17 @@ const resolveAIToolId = (appName: string, exePath: string | null): AIToolId | nu
   return null;
 };
 
+const UPSERT_SETTING_SQL = `
+  INSERT INTO settings (key, value_json, updated_at)
+  VALUES (?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+  `;
+
+type SettingsEntry = {
+  key: keyof AppSettings;
+  value: AppSettings[keyof AppSettings];
+};
+
 export class ArkWatchDatabase {
   private db: Database | null = null;
 
@@ -187,116 +198,68 @@ export class ArkWatchDatabase {
   async updateSettings(next: Partial<AppSettings>): Promise<AppSettings> {
     const db = this.requireDb();
     const now = new Date().toISOString();
+    const entries: SettingsEntry[] = [];
 
     if (typeof next.idleThresholdSeconds === 'number') {
-      const idleThresholdSeconds = Math.max(60, Math.min(1800, Math.floor(next.idleThresholdSeconds)));
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('idleThresholdSeconds', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(idleThresholdSeconds),
-        now
-      );
+      entries.push({
+        key: 'idleThresholdSeconds',
+        value: Math.max(60, Math.min(1800, Math.floor(next.idleThresholdSeconds)))
+      });
     }
 
     if (typeof next.launchAtLogin === 'boolean') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('launchAtLogin', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.launchAtLogin),
-        now
-      );
+      entries.push({ key: 'launchAtLogin', value: next.launchAtLogin });
     }
 
     if (next.theme === 'light' || next.theme === 'dark') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('theme', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.theme),
-        now
-      );
+      entries.push({ key: 'theme', value: next.theme });
     }
 
     if (typeof next.dailyGoalHours === 'number') {
-      const dailyGoalHours = Math.max(1, Math.min(24, Math.floor(next.dailyGoalHours)));
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('dailyGoalHours', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(dailyGoalHours),
-        now
-      );
+      entries.push({
+        key: 'dailyGoalHours',
+        value: Math.max(1, Math.min(24, Math.floor(next.dailyGoalHours)))
+      });
     }
 
     if (typeof next.minimizeToTray === 'boolean') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('minimizeToTray', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.minimizeToTray),
-        now
-      );
+      entries.push({ key: 'minimizeToTray', value: next.minimizeToTray });
     }
 
     if (typeof next.dailyGoalNotification === 'boolean') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('dailyGoalNotification', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.dailyGoalNotification),
-        now
-      );
+      entries.push({ key: 'dailyGoalNotification', value: next.dailyGoalNotification });
     }
 
     if (typeof next.autoCheckUpdates === 'boolean') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('autoCheckUpdates', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.autoCheckUpdates),
-        now
-      );
+      entries.push({ key: 'autoCheckUpdates', value: next.autoCheckUpdates });
     }
 
     if (typeof next.breakReminderEnabled === 'boolean') {
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('breakReminderEnabled', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(next.breakReminderEnabled),
-        now
-      );
+      entries.push({ key: 'breakReminderEnabled', value: next.breakReminderEnabled });
     }
 
     if (typeof next.breakReminderIntervalMinutes === 'number') {
-      const breakReminderIntervalMinutes = Math.max(5, Math.min(480, Math.floor(next.breakReminderIntervalMinutes)));
-      await db.run(
-        `
-        INSERT INTO settings (key, value_json, updated_at)
-        VALUES ('breakReminderIntervalMinutes', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-        `,
-        JSON.stringify(breakReminderIntervalMinutes),
-        now
-      );
+      entries.push({
+        key: 'breakReminderIntervalMinutes',
+        value: Math.max(5, Math.min(480, Math.floor(next.breakReminderIntervalMinutes)))
+      });
+    }
+
+    if (entries.length === 0) {
+      return this.getSettings();
+    }
+
+    await db.exec('BEGIN IMMEDIATE TRANSACTION');
+
+    try {
+      for (const entry of entries) {
+        await db.run(UPSERT_SETTING_SQL, entry.key, JSON.stringify(entry.value), now);
+      }
+
+      await db.exec('COMMIT');
+    } catch (error) {
+      await db.exec('ROLLBACK');
+      throw error;
     }
 
     return this.getSettings();
@@ -684,3 +647,4 @@ export class ArkWatchDatabase {
     return this.db;
   }
 }
+
