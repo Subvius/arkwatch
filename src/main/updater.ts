@@ -11,6 +11,7 @@ type UpdaterWindowGetter = () => BrowserWindow | null;
 
 let activeWindowGetter: UpdaterWindowGetter = () => null;
 let listenersRegistered = false;
+let updaterDisposed = false;
 
 const getUpdaterSkipReason = (): string | null => {
   if (process.env.ARKWATCH_DISABLE_UPDATES === '1') {
@@ -45,28 +46,52 @@ const sendDownloadProgress = (progress: ProgressInfo): void => {
 };
 
 const onCheckingForUpdate = (): void => {
+  if (updaterDisposed) {
+    return;
+  }
+
   console.info('[updater] checking for update');
 };
 
 const onUpdateAvailable = (info: { version: string }): void => {
+  if (updaterDisposed) {
+    return;
+  }
+
   console.info('[updater] update available', info.version);
 };
 
 const onUpdateNotAvailable = (): void => {
+  if (updaterDisposed) {
+    return;
+  }
+
   console.info('[updater] no updates available');
 };
 
 const onDownloadProgress = (progress: ProgressInfo): void => {
+  if (updaterDisposed) {
+    return;
+  }
+
   const roundedPercent = Math.round(progress.percent);
   console.info('[updater] download progress', `${roundedPercent}%`);
   sendDownloadProgress(progress);
 };
 
 const onError = (error: Error): void => {
+  if (updaterDisposed) {
+    return;
+  }
+
   console.error('[updater] failed', error);
 };
 
 const onUpdateDownloaded = async (info: { version: string }): Promise<void> => {
+  if (updaterDisposed) {
+    return;
+  }
+
   try {
     const options: MessageBoxOptions = {
       type: 'info',
@@ -84,6 +109,10 @@ const onUpdateDownloaded = async (info: { version: string }): Promise<void> => {
       ? await dialog.showMessageBox(mainWindow, options)
       : await dialog.showMessageBox(options);
 
+    if (updaterDisposed) {
+      return;
+    }
+
     if (result.response === 0) {
       setImmediate(() => {
         try {
@@ -98,8 +127,23 @@ const onUpdateDownloaded = async (info: { version: string }): Promise<void> => {
   }
 };
 
+const removeUpdaterListeners = (): void => {
+  if (!listenersRegistered) {
+    return;
+  }
+
+  autoUpdater.off('checking-for-update', onCheckingForUpdate);
+  autoUpdater.off('update-available', onUpdateAvailable);
+  autoUpdater.off('update-not-available', onUpdateNotAvailable);
+  autoUpdater.off('download-progress', onDownloadProgress);
+  autoUpdater.off('error', onError);
+  autoUpdater.off('update-downloaded', onUpdateDownloaded);
+  listenersRegistered = false;
+};
+
 const ensureUpdaterListeners = (getMainWindowForUpdates: UpdaterWindowGetter): void => {
   activeWindowGetter = getMainWindowForUpdates;
+  updaterDisposed = false;
   configureAutoUpdater();
 
   if (listenersRegistered) {
@@ -183,7 +227,9 @@ export const setupAutoUpdater = (getMainWindowForUpdates: UpdaterWindowGetter): 
 
   return () => {
     isDisposed = true;
+    updaterDisposed = true;
     clearTimeout(initialTimer);
     clearInterval(recurringTimer);
+    removeUpdaterListeners();
   };
 };
