@@ -119,6 +119,7 @@ export type ArkWatchApi = {
     pause: () => Promise<TrackerStatus>;
     resume: () => Promise<TrackerStatus>;
     toggle: () => Promise<TrackerStatus>;
+    onStatusChanged: (callback: (status: TrackerStatus) => void) => () => void;
   };
   stats: {
     getSummary: (range: DateRange) => Promise<SummaryStats>;
