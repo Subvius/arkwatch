@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { promises as fs, existsSync } from 'node:fs';
-import { app, BrowserWindow, Menu, Notification, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, nativeTheme } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc';
 import { ArkWatchDatabase } from './db/database';
 import { registerIpcHandlers } from './ipc';
@@ -45,6 +45,10 @@ const getAppIconPath = (): string | null => {
   return null;
 };
 
+const getWindowBackgroundColor = (): string => (
+  nativeTheme.shouldUseDarkColors ? '#131520' : '#f3f5fb'
+);
+
 const createWindow = (): BrowserWindow => {
   const appIconPath = getAppIconPath();
 
@@ -55,7 +59,7 @@ const createWindow = (): BrowserWindow => {
     minHeight: 640,
     show: false,
     frame: false,
-    backgroundColor: '#131520',
+    backgroundColor: getWindowBackgroundColor(),
     title: 'ArkWatch',
     ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
@@ -97,6 +101,7 @@ const applyAppSettings = async (settings: AppSettings): Promise<void> => {
     openAtLogin: settings.launchAtLogin,
     path: process.execPath
   });
+  nativeTheme.themeSource = settings.theme;
   minimizeToTray = settings.minimizeToTray;
 };
 
@@ -375,5 +380,6 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
 
 
