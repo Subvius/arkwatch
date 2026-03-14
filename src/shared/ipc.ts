@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   windowClose: 'window.close',
   windowRestoredFromTray: 'window.restoredFromTray',
   updaterDownloadProgress: 'updater.downloadProgress',
+  updaterCheckNow: 'updater.checkNow',
   // Focus
   focusGetState: 'focus.getState',
   focusStart: 'focus.start',
@@ -36,3 +37,4 @@ export const IPC_CHANNELS = {
   // Break Reminder
   breakReminderNotify: 'breakReminder.notify'
 } as const;
+

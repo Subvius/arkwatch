@@ -65,6 +65,7 @@ const api: ArkWatchApi = {
     }
   },
   updater: {
+    checkNow: () => ipcRenderer.invoke(IPC_CHANNELS.updaterCheckNow),
     onDownloadProgress: (callback: (progress: ProgressInfo) => void) => {
       const handler = (_event: unknown, progress: ProgressInfo) => callback(progress);
       ipcRenderer.on(IPC_CHANNELS.updaterDownloadProgress, handler);
