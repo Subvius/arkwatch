@@ -20,8 +20,6 @@ import { DashboardSkeleton } from './components/DashboardSkeleton';
 import { MascotHeader } from './components/MascotHeader';
 import { UsageWidgets } from './components/UsageWidgets';
 import { FocusWidget } from './components/FocusWidget';
-import { AppLimitsSettings } from './components/settings/AppLimitsSettings';
-import { FocusScheduleSettings } from './components/settings/FocusScheduleSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { isBrowserApp } from './lib/browser-detection';
 import type { ElephantMascotHandle, IdleMode } from './components/ElephantMascot';
@@ -90,6 +88,22 @@ const applyThemeToDocument = (theme: ThemeSetting): void => {
   localStorage.setItem('theme', theme);
 };
 
+type SettingsTab = 'general' | 'notifications' | 'app-limits' | 'focus-schedule';
+
+const AppLimitsSettings = React.lazy(async () => ({
+  default: (await import('./components/settings/AppLimitsSettings')).AppLimitsSettings
+}));
+
+const FocusScheduleSettings = React.lazy(async () => ({
+  default: (await import('./components/settings/FocusScheduleSettings')).FocusScheduleSettings
+}));
+
+const SettingsPanelFallback = ({ label }: { label: string }): React.JSX.Element => (
+  <div className="rounded-lg border border-dashed border-[hsl(var(--border))] p-4 text-sm text-[hsl(var(--muted))]">
+    {`Loading ${label}...`}
+  </div>
+);
+
 export const App = (): React.JSX.Element => {
   const [status, setStatus] = React.useState<TrackerStatus>({
     running: true,
@@ -109,6 +123,8 @@ export const App = (): React.JSX.Element => {
   const [focusTodayCount, setFocusTodayCount] = React.useState(0);
   const [appLimits, setAppLimits] = React.useState<AppLimit[]>([]);
   const [focusSchedules, setFocusSchedules] = React.useState<FocusSchedule[]>([]);
+  const [appLimitsLoaded, setAppLimitsLoaded] = React.useState(false);
+  const [focusSchedulesLoaded, setFocusSchedulesLoaded] = React.useState(false);
   const [settings, setSettings] = React.useState<AppSettings>({
     idleThresholdSeconds: 300, launchAtLogin: true, theme: getDomTheme(),
     dailyGoalHours: 8, minimizeToTray: true, dailyGoalNotification: true,
@@ -124,6 +140,7 @@ export const App = (): React.JSX.Element => {
   const [draftBreakReminderInterval, setDraftBreakReminderInterval] = React.useState('90');
   const [draftTheme, setDraftTheme] = React.useState<ThemeSetting>(getDomTheme());
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<SettingsTab>('general');
   const [dataLoaded, setDataLoaded] = React.useState(false);
   const [idleMode, setIdleMode] = React.useState<IdleMode>('none');
   const [scheduledIdle, setScheduledIdle] = React.useState(false);
@@ -217,16 +234,24 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const loadFocusData = React.useCallback(async () => {
-    const [state, count, limits, schedules] = await Promise.all([
+    const [state, count] = await Promise.all([
       window.arkwatch.focus.getState(),
-      window.arkwatch.focus.getTodayCount(),
-      window.arkwatch.appLimits.getAll(),
-      window.arkwatch.focusSchedules.getAll()
+      window.arkwatch.focus.getTodayCount()
     ]);
     setFocusState(state);
     setFocusTodayCount(count);
+  }, []);
+
+  const loadAppLimits = React.useCallback(async () => {
+    const limits = await window.arkwatch.appLimits.getAll();
     setAppLimits(limits);
+    setAppLimitsLoaded(true);
+  }, []);
+
+  const loadFocusSchedules = React.useCallback(async () => {
+    const schedules = await window.arkwatch.focusSchedules.getAll();
     setFocusSchedules(schedules);
+    setFocusSchedulesLoaded(true);
   }, []);
 
   React.useEffect(() => {
@@ -256,6 +281,24 @@ export const App = (): React.JSX.Element => {
       window.clearInterval(processTimer);
     };
   }, [loadAIStats, loadData, loadFocusData, loadProcesses, loadSettings, loadStatus]);
+
+  React.useEffect(() => {
+    if (!settingsOpen) {
+      return;
+    }
+
+    if (settingsTab === 'app-limits' && !appLimitsLoaded) {
+      void loadAppLimits().catch((error: unknown) => {
+        console.error('[settings] failed to load app limits', error);
+      });
+    }
+
+    if (settingsTab === 'focus-schedule' && !focusSchedulesLoaded) {
+      void loadFocusSchedules().catch((error: unknown) => {
+        console.error('[settings] failed to load focus schedules', error);
+      });
+    }
+  }, [appLimitsLoaded, focusSchedulesLoaded, loadAppLimits, loadFocusSchedules, settingsOpen, settingsTab]);
 
   const toggleTracking = async (): Promise<void> => {
     const next = await window.arkwatch.tracker.toggle();
@@ -483,6 +526,7 @@ export const App = (): React.JSX.Element => {
                 <Dialog open={settingsOpen} onOpenChange={(open) => {
                   setSettingsOpen(open);
                   if (open) {
+                    setSettingsTab('general');
                     setDraftIdle(String(settings.idleThresholdSeconds));
                     setDraftLaunchAtLogin(settings.launchAtLogin);
                     setDraftDailyGoalHours(String(settings.dailyGoalHours));
@@ -508,7 +552,7 @@ export const App = (): React.JSX.Element => {
                       <DialogDescription>Configure your ArkWatch preferences.</DialogDescription>
                     </DialogHeader>
 
-                    <Tabs defaultValue="general">
+                    <Tabs value={settingsTab} onValueChange={(value) => setSettingsTab(value as SettingsTab)}>
                       <TabsList className="w-full">
                         <TabsTrigger value="general">General</TabsTrigger>
                         <TabsTrigger value="notifications">Alerts</TabsTrigger>
@@ -621,35 +665,52 @@ export const App = (): React.JSX.Element => {
                       </TabsContent>
 
                       <TabsContent value="app-limits">
-                        <AppLimitsSettings
-                          limits={appLimits}
-                          onUpsert={async (limit) => {
-                            const updated = await window.arkwatch.appLimits.upsert(limit);
-                            setAppLimits(updated);
-                          }}
-                          onRemove={async (id) => {
-                            const updated = await window.arkwatch.appLimits.remove(id);
-                            setAppLimits(updated);
-                          }}
-                        />
+                        <React.Suspense fallback={<SettingsPanelFallback label="limits" />}>
+                          {appLimitsLoaded ? (
+                            <AppLimitsSettings
+                              limits={appLimits}
+                              onUpsert={async (limit) => {
+                                const updated = await window.arkwatch.appLimits.upsert(limit);
+                                setAppLimits(updated);
+                                setAppLimitsLoaded(true);
+                              }}
+                              onRemove={async (id) => {
+                                const updated = await window.arkwatch.appLimits.remove(id);
+                                setAppLimits(updated);
+                                setAppLimitsLoaded(true);
+                              }}
+                            />
+                          ) : (
+                            <SettingsPanelFallback label="limits" />
+                          )}
+                        </React.Suspense>
                       </TabsContent>
 
                       <TabsContent value="focus-schedule">
-                        <FocusScheduleSettings
-                          schedules={focusSchedules}
-                          onCreate={async (schedule) => {
-                            const updated = await window.arkwatch.focusSchedules.create(schedule);
-                            setFocusSchedules(updated);
-                          }}
-                          onUpdate={async (schedule) => {
-                            const updated = await window.arkwatch.focusSchedules.update(schedule);
-                            setFocusSchedules(updated);
-                          }}
-                          onRemove={async (id) => {
-                            const updated = await window.arkwatch.focusSchedules.remove(id);
-                            setFocusSchedules(updated);
-                          }}
-                        />
+                        <React.Suspense fallback={<SettingsPanelFallback label="schedule" />}>
+                          {focusSchedulesLoaded ? (
+                            <FocusScheduleSettings
+                              schedules={focusSchedules}
+                              onCreate={async (schedule) => {
+                                const updated = await window.arkwatch.focusSchedules.create(schedule);
+                                setFocusSchedules(updated);
+                                setFocusSchedulesLoaded(true);
+                              }}
+                              onUpdate={async (schedule) => {
+                                const updated = await window.arkwatch.focusSchedules.update(schedule);
+                                setFocusSchedules(updated);
+                                setFocusSchedulesLoaded(true);
+                              }}
+                              onRemove={async (id) => {
+                                const updated = await window.arkwatch.focusSchedules.remove(id);
+                                setFocusSchedules(updated);
+                                setFocusSchedulesLoaded(true);
+                              }}
+                            />
+                          ) : (
+                            <SettingsPanelFallback label="schedule" />
+                          )}
+                        </React.Suspense>
                       </TabsContent>
 
                     </Tabs>
@@ -798,4 +859,5 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+
 
