@@ -1,6 +1,6 @@
 {
   "name": "arkwatch",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Windows 11 screen-time tracker with local SQLite storage",
   "main": "out/main/index.js",
   "type": "module",
@@ -23,6 +23,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "active-win": "^9.0.0",
+    "chrono-node": "^2.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -67,6 +68,4 @@
     "tar": "^6.2.1"
   }
 }
-
-
 
