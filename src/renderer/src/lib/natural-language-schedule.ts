@@ -28,12 +28,16 @@ const DAY_TOKEN_TO_NAME: Record<string, DayName> = {
   sunday: 'Sun'
 };
 
-const DAY_TOKEN_PATTERN = /\b(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/gi;
-const DAY_RANGE_PATTERN = /\b(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b\s*(?:-|to|through|thru|until)\s*\b(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/gi;
+const DAY_TOKEN_PATTERN = /\b(mon(?:day)?s?|tues?(?:day)?s?|weds?(?:nesday)?s?|thurs?(?:day)?s?|fri(?:day)?s?|sat(?:urday)?s?|sun(?:day)?s?)\b/gi;
+const DAY_RANGE_PATTERN = /\b(mon(?:day)?s?|tues?(?:day)?s?|weds?(?:nesday)?s?|thurs?(?:day)?s?|fri(?:day)?s?|sat(?:urday)?s?|sun(?:day)?s?)\b\s*(?:-|to|through|thru|until)\s*\b(mon(?:day)?s?|tues?(?:day)?s?|weds?(?:nesday)?s?|thurs?(?:day)?s?|fri(?:day)?s?|sat(?:urday)?s?|sun(?:day)?s?)\b/gi;
 const DURATION_PATTERN = /\bfor\s+(\d+)\s*(minutes?|mins?|min|m|hours?|hrs?|hr|h)\b/i;
 
+const normalizeDayToken = (token: string): string => {
+  return token.trim().toLowerCase().replace(/s$/, '');
+};
+
 const toDayName = (token: string): DayName | null => {
-  const normalized = token.trim().toLowerCase();
+  const normalized = normalizeDayToken(token);
   return DAY_TOKEN_TO_NAME[normalized] ?? null;
 };
 

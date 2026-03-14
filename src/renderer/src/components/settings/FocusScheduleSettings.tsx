@@ -13,7 +13,7 @@ type FocusScheduleSettingsProps = {
   schedules: FocusSchedule[];
   onCreate: (schedule: Omit<FocusSchedule, 'id' | 'createdAt'>) => void | Promise<void>;
   onUpdate: (schedule: FocusSchedule) => void | Promise<void>;
-  onRemove: (id: number) => void;
+  onRemove: (id: number) => void | Promise<void>;
 };
 
 const DAY_NAMES: NaturalLanguageSchedule['daysOfWeek'][number][] = [
@@ -30,7 +30,9 @@ const parseStoredDays = (daysOfWeek: string): NaturalLanguageSchedule['daysOfWee
   return daysOfWeek
     .split(',')
     .map((day) => day.trim())
-    .filter((day): day is NaturalLanguageSchedule['daysOfWeek'][number] => DAY_NAMES.includes(day as NaturalLanguageSchedule['daysOfWeek'][number]));
+    .filter((day): day is NaturalLanguageSchedule['daysOfWeek'][number] =>
+      DAY_NAMES.includes(day as NaturalLanguageSchedule['daysOfWeek'][number])
+    );
 };
 
 const buildParsedSchedule = (schedule: FocusSchedule): NaturalLanguageSchedule => {
@@ -54,6 +56,7 @@ export const FocusScheduleSettings = ({
   const [adding, setAdding] = React.useState(false);
   const [editingSchedule, setEditingSchedule] = React.useState<FocusSchedule | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const [label, setLabel] = React.useState('');
 
   const [naturalInput, setNaturalInput] = React.useState('');
@@ -67,6 +70,7 @@ export const FocusScheduleSettings = ({
   const labelInputId = React.useId();
   const naturalInputId = React.useId();
   const naturalErrorId = React.useId();
+  const actionErrorId = React.useId();
 
   const parsedSummary = parsedSchedule
     ? `${parsedSchedule.daysOfWeek.join(', ')} | ${parsedSchedule.startTime}-${parsedSchedule.endTime}`
@@ -94,6 +98,7 @@ export const FocusScheduleSettings = ({
     setAdding(false);
     setEditingSchedule(null);
     setIsSubmitting(false);
+    setActionError(null);
     setLabel('');
     setNaturalInput('');
     setNaturalError(null);
@@ -105,6 +110,7 @@ export const FocusScheduleSettings = ({
     setAdding(true);
     setEditingSchedule(null);
     setIsSubmitting(false);
+    setActionError(null);
     setLabel('');
     setNaturalInput('');
     setNaturalError(null);
@@ -117,6 +123,7 @@ export const FocusScheduleSettings = ({
     setAdding(true);
     setEditingSchedule(schedule);
     setIsSubmitting(false);
+    setActionError(null);
     setLabel(schedule.label);
     setNaturalInput(buildNaturalInput(schedule));
     setNaturalError(null);
@@ -150,6 +157,7 @@ export const FocusScheduleSettings = ({
       enabled: editingSchedule?.enabled ?? true
     };
 
+    setActionError(null);
     setNaturalError(null);
     setIsSubmitting(true);
 
@@ -170,10 +178,33 @@ export const FocusScheduleSettings = ({
     }
   };
 
+  const handleRemove = async (scheduleId: number): Promise<void> => {
+    setActionError(null);
+    setIsSubmitting(true);
+
+    try {
+      await onRemove(scheduleId);
+      if (editingSchedule?.id === scheduleId) {
+        resetForm();
+      }
+    } catch (error) {
+      console.error('Failed to remove focus schedule', error);
+      setActionError(error instanceof Error ? error.message : 'Could not remove schedule.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const canSubmit = Boolean(label.trim() && naturalInput.trim()) && !isSubmitting;
 
   return (
     <div className="space-y-1">
+      {actionError && (
+        <p id={actionErrorId} role="alert" className="px-1 pb-2 text-[11px] text-rose-500">
+          {actionError}
+        </p>
+      )}
+
       {schedules.map((schedule) => (
         <div
           key={schedule.id}
@@ -195,18 +226,23 @@ export const FocusScheduleSettings = ({
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => openEditForm(schedule)}
               aria-label={`Edit schedule ${schedule.label}`}
-              className="flex h-6 items-center gap-1 rounded-md px-2 text-[11px] text-[hsl(var(--muted))] transition-colors hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100"
+              className="flex h-6 items-center gap-1 rounded-md px-2 text-[11px] text-[hsl(var(--muted))] transition-colors hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-50"
             >
               <Pencil className="h-3 w-3" />
               Edit
             </button>
             <button
               type="button"
-              onClick={() => onRemove(schedule.id)}
+              disabled={isSubmitting}
+              onClick={() => {
+                void handleRemove(schedule.id);
+              }}
               aria-label={`Remove schedule ${schedule.label}`}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted))] transition-all hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100"
+              aria-describedby={actionError ? actionErrorId : undefined}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted))] transition-all hover:bg-[hsl(var(--border))] hover:text-[hsl(var(--ink))] focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-50"
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -335,8 +371,9 @@ export const FocusScheduleSettings = ({
             </Button>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={resetForm}
-              className="flex h-8 items-center px-2 text-xs text-[hsl(var(--muted))] transition-colors hover:text-[hsl(var(--ink))]"
+              className="flex h-8 items-center px-2 text-xs text-[hsl(var(--muted))] transition-colors hover:text-[hsl(var(--ink))] disabled:pointer-events-none disabled:opacity-50"
             >
               Cancel
             </button>
@@ -347,8 +384,9 @@ export const FocusScheduleSettings = ({
       {!adding && (
         <button
           type="button"
+          disabled={isSubmitting}
           onClick={openCreateForm}
-          className="flex w-full items-center gap-2.5 rounded-lg border border-dashed border-[hsl(var(--border))] px-3 py-2.5 text-[hsl(var(--muted))] transition-all hover:border-[hsl(var(--accent))]/30 hover:bg-[hsl(var(--bg))] hover:text-[hsl(var(--ink))]"
+          className="flex w-full items-center gap-2.5 rounded-lg border border-dashed border-[hsl(var(--border))] px-3 py-2.5 text-[hsl(var(--muted))] transition-all hover:border-[hsl(var(--accent))]/30 hover:bg-[hsl(var(--bg))] hover:text-[hsl(var(--ink))] disabled:pointer-events-none disabled:opacity-50"
         >
           <div className="flex h-5 w-5 items-center justify-center rounded-md">
             <Plus className="h-3.5 w-3.5" />
