@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { SessionInput } from '../../shared/types';
+import type { AIToolProcess, SessionInput } from '../../shared/types';
 import type { ActiveApp } from './types';
 
 const execAsync = promisify(exec);
@@ -64,6 +64,23 @@ export const mapProcessNamesToAITools = (processNames: string[]): Map<string, Ba
   return results;
 };
 
+const toProcessSnapshot = (processes: Map<string, BackgroundProcess>): ReadonlyArray<AIToolProcess> =>
+  PROCESS_RULES.map((rule) => {
+    const info = processes.get(rule.id);
+    return {
+      id: rule.id,
+      name: info?.name ?? rule.appName,
+      running: info?.running ?? false
+    } satisfies AIToolProcess;
+  });
+
+const areSnapshotsEqual = (left: ReadonlyArray<AIToolProcess>, right: ReadonlyArray<AIToolProcess>): boolean =>
+  left.length === right.length &&
+  left.every((item, index) => {
+    const other = right[index];
+    return other !== undefined && item.id === other.id && item.name === other.name && item.running === other.running;
+  });
+
 export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
   const results = mapProcessNamesToAITools([]);
 
@@ -89,6 +106,8 @@ type ActiveSession = {
 export class BackgroundProcessTracker {
   private activeSessions = new Map<string, ActiveSession>();
   private intervalId: NodeJS.Timeout | null = null;
+  private readonly listeners = new Set<(processes: ReadonlyArray<AIToolProcess>) => void>();
+  private lastSnapshot: ReadonlyArray<AIToolProcess> = toProcessSnapshot(mapProcessNamesToAITools([]));
 
   constructor(
     private readonly persistSession: (session: SessionInput) => Promise<void>,
@@ -100,6 +119,19 @@ export class BackgroundProcessTracker {
     const session = this.activeSessions.get(toolId);
     if (!session) return null;
     return { appName: session.rule.appName, exePath: session.rule.exePath };
+  }
+
+  getProcessesSnapshot(): ReadonlyArray<AIToolProcess> {
+    return this.lastSnapshot;
+  }
+
+  onProcessesChanged(callback: (processes: ReadonlyArray<AIToolProcess>) => void): () => void {
+    this.listeners.add(callback);
+    callback(this.lastSnapshot);
+
+    return () => {
+      this.listeners.delete(callback);
+    };
   }
 
   start(): void {
@@ -122,11 +154,26 @@ export class BackgroundProcessTracker {
       await this.flush(id, session, now);
     }
     this.activeSessions.clear();
+    this.publishSnapshot(mapProcessNamesToAITools([]));
+  }
+
+  private publishSnapshot(processes: Map<string, BackgroundProcess>): void {
+    const nextSnapshot = toProcessSnapshot(processes);
+    if (areSnapshotsEqual(this.lastSnapshot, nextSnapshot)) {
+      return;
+    }
+
+    this.lastSnapshot = nextSnapshot;
+    for (const listener of this.listeners) {
+      listener(nextSnapshot);
+    }
   }
 
   private async poll(): Promise<void> {
     const processes = await scanBackgroundProcesses();
     const now = new Date();
+
+    this.publishSnapshot(processes);
 
     for (const rule of PROCESS_RULES) {
       const info = processes.get(rule.id);

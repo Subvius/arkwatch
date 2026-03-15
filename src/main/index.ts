@@ -298,7 +298,7 @@ const bootstrap = async (): Promise<void> => {
     syncAutoUpdater(nextSettings);
   }, () => {
     refreshTrayMenu?.();
-  }, getMainWindow, focusService, appLimitChecker);
+  }, getMainWindow, focusService, appLimitChecker, bgTracker);
   registerEffectIpcHandlers(database, getMainWindow);
 
   mainWindow = createWindow();
@@ -385,6 +385,7 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
 
 
 

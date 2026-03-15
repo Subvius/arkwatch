@@ -138,6 +138,7 @@ export type ArkWatchApi = {
   };
   processes: {
     getAITools: () => Promise<AIToolProcess[]>;
+    onChanged: (callback: (processes: AIToolProcess[]) => void) => () => void;
   };
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
@@ -176,4 +177,3 @@ export type ArkWatchApi = {
     onRestoredFromTray: (callback: () => void) => () => void;
   };
 };
-

@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ArkWatchApi, AppLimit, AppSettings, DateRange, FocusSchedule, FocusSessionState, AppLimitStatus, ProgressInfo, TrackerStatus } from '../shared/types';
+import type {
+  AIToolProcess,
+  ArkWatchApi,
+  AppLimit,
+  AppLimitStatus,
+  AppSettings,
+  DateRange,
+  FocusSchedule,
+  FocusSessionState,
+  ProgressInfo,
+  TrackerStatus
+} from '../shared/types';
 import { IPC_CHANNELS } from '../shared/ipc';
 import { effectBridgeApi } from './effect-bridge';
 
@@ -25,7 +36,12 @@ const api: ArkWatchApi = {
     update: (settings: Partial<AppSettings>) => ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, settings)
   },
   processes: {
-    getAITools: () => ipcRenderer.invoke(IPC_CHANNELS.processesGetAITools)
+    getAITools: () => ipcRenderer.invoke(IPC_CHANNELS.processesGetAITools),
+    onChanged: (callback: (processes: AIToolProcess[]) => void) => {
+      const handler = (_event: unknown, processes: AIToolProcess[]) => callback(processes);
+      ipcRenderer.on(IPC_CHANNELS.processesChanged, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.processesChanged, handler); };
+    }
   },
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params)
