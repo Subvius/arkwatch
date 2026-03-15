@@ -4,6 +4,8 @@ import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import type { AppLimit, TopAppStat } from '../../../../shared/types';
 import { formatDuration } from '../../lib/utils';
+import { getAppIconCacheKey } from '../../lib/app-icon';
+import { AppIcon } from '../AppIcon';
 
 type AppLimitsSettingsProps = {
   limits: AppLimit[];
@@ -12,6 +14,21 @@ type AppLimitsSettingsProps = {
 };
 
 const STEP_SECONDS = 15 * 60; // 15-min increments
+
+const isMissingLocalInstall = (app: TopAppStat, nativeIcons: Record<string, string>): boolean => {
+  const exePath = app.exePath?.trim();
+  if (!exePath) {
+    return false;
+  }
+
+  const iconKey = getAppIconCacheKey(app.appName, app.exePath);
+  if (nativeIcons[iconKey]) {
+    return false;
+  }
+
+  const normalizedPath = exePath.replace(/\//g, '\\').toLowerCase();
+  return normalizedPath.includes('\\appdata\\local\\programs\\');
+};
 
 export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSettingsProps): React.JSX.Element => {
   const [adding, setAdding] = React.useState(false);
@@ -33,30 +50,37 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
       for (const app of apps) {
         try {
           const icon = await window.arkwatch.icons.getAppIcon({ appName: app.appName, exePath: app.exePath });
-          if (icon) icons[app.appName] = icon;
-        } catch { /* ignore */ }
+          if (icon) {
+            icons[getAppIconCacheKey(app.appName, app.exePath)] = icon;
+          }
+        } catch {
+          // ignore
+        }
       }
-      setNativeIcons(icons);
+      setNativeIcons((prev) => ({ ...prev, ...icons }));
     };
     void load();
   }, [adding]);
 
-  // Load icons for existing limits
   React.useEffect(() => {
     const loadLimitIcons = async (): Promise<void> => {
       const icons: Record<string, string> = {};
       for (const limit of limits) {
         try {
           const icon = await window.arkwatch.icons.getAppIcon({ appName: limit.appName, exePath: limit.exePath });
-          if (icon) icons[limit.appName] = icon;
-        } catch { /* ignore */ }
+          if (icon) {
+            icons[getAppIconCacheKey(limit.appName, limit.exePath)] = icon;
+          }
+        } catch {
+          // ignore
+        }
       }
       setNativeIcons((prev) => ({ ...prev, ...icons }));
     };
     if (limits.length > 0) void loadLimitIcons();
   }, [limits]);
 
-  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName));
+  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName) && !isMissingLocalInstall(app, nativeIcons));
 
   const handleAdd = (): void => {
     if (!selectedApp) return;
@@ -80,13 +104,12 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
       {limits.map((limit) => (
         <div key={limit.id} className="flex items-center justify-between rounded-md border px-3 py-2">
           <div className="flex items-center gap-2">
-            {nativeIcons[limit.appName] ? (
-              <img src={nativeIcons[limit.appName]} alt="" className="h-5 w-5 shrink-0 rounded" />
-            ) : (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[hsl(var(--border))] text-[10px] font-semibold text-[hsl(var(--muted))]">
-                {limit.appName.charAt(0).toUpperCase()}
-              </span>
-            )}
+            <AppIcon
+              appName={limit.appName}
+              exePath={limit.exePath}
+              nativeIconSrc={nativeIcons[getAppIconCacheKey(limit.appName, limit.exePath)] ?? null}
+              size="md"
+            />
             <span className="text-sm font-medium">{limit.appName}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -116,13 +139,12 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
                 {filteredApps.map((app) => (
                   <SelectItem key={app.appName} value={app.appName}>
                     <span className="flex items-center gap-2">
-                      {nativeIcons[app.appName] ? (
-                        <img src={nativeIcons[app.appName]} alt="" className="h-4 w-4 shrink-0 rounded" />
-                      ) : (
-                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[hsl(var(--border))] text-[8px] font-semibold text-[hsl(var(--muted))]">
-                          {app.appName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <AppIcon
+                        appName={app.appName}
+                        exePath={app.exePath}
+                        nativeIconSrc={nativeIcons[getAppIconCacheKey(app.appName, app.exePath)] ?? null}
+                        size="sm"
+                      />
                       {app.appName}
                     </span>
                   </SelectItem>
@@ -169,3 +191,4 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
     </div>
   );
 };
+

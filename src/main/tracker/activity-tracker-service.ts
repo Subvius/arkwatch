@@ -2,6 +2,7 @@ import type { ActiveApp, ActivitySource } from './types';
 import type { TrackerStatus } from '../../shared/types';
 import { ActivityTrackerCore } from './activity-tracker-core';
 import { ArkWatchDatabase } from '../db/database';
+import { isTrackableForegroundApp } from '../lib/app-tracking-policy';
 
 /** Lowercase exe basenames of common terminal emulators (Windows). */
 const TERMINAL_EXE_NAMES = new Set([
@@ -145,6 +146,10 @@ export class ActivityTrackerService {
       }
     }
 
+    if (!isTrackableForegroundApp(app)) {
+      app = null;
+    }
+
     const previousStatus = this.core.getStatus();
     await this.core.tick(new Date(), app, idleSeconds);
 
@@ -160,5 +165,4 @@ export class ActivityTrackerService {
     }
   }
 }
-
 

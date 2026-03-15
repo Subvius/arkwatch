@@ -9,11 +9,6 @@ type Segment = {
   isIdle: boolean;
 };
 
-const UNKNOWN_APP: ActiveApp = {
-  appName: 'Unknown',
-  exePath: null
-};
-
 export class ActivityTrackerCore {
   private segment: Segment | null = null;
   private paused = false;
@@ -70,21 +65,28 @@ export class ActivityTrackerCore {
     const nextIdle = this.idleSeconds >= this.idleThresholdSeconds;
     this.idle = nextIdle;
 
-    const nextApp = app ?? UNKNOWN_APP;
-
     if (!this.segment) {
+      if (!app) {
+        return;
+      }
+
       this.segment = {
-        app: nextApp,
+        app,
         startedAt: at,
         isIdle: nextIdle
       };
       return;
     }
 
-    if (this.segment.isIdle !== nextIdle || !this.isSameApp(this.segment.app, nextApp)) {
+    if (!app) {
+      await this.flush(at, 'focus-change');
+      return;
+    }
+
+    if (this.segment.isIdle !== nextIdle || !this.isSameApp(this.segment.app, app)) {
       await this.flush(at, 'focus-change');
       this.segment = {
-        app: nextApp,
+        app,
         startedAt: at,
         isIdle: nextIdle
       };
@@ -95,7 +97,7 @@ export class ActivityTrackerCore {
     if (segmentAgeSeconds >= this.checkpointSeconds) {
       await this.flush(at, 'heartbeat');
       this.segment = {
-        app: nextApp,
+        app,
         startedAt: at,
         isIdle: nextIdle
       };
@@ -137,3 +139,4 @@ export class ActivityTrackerCore {
     return left.appName === right.appName && left.exePath === right.exePath;
   }
 }
+
