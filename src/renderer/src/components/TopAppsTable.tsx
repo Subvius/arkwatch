@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AppWindow } from 'lucide-react';
 import type { TopAppStat } from '../../../shared/types';
 import { formatDuration } from '../lib/utils';
 import { detectAITool, getAITools } from '../lib/ai-tools';
@@ -69,6 +70,7 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
       cancelled = true;
     };
   }, [apps]);
+
 
   return (
     <Table>
