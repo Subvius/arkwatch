@@ -10,6 +10,8 @@ export const IPC_CHANNELS = {
   settingsGet: 'settings.get',
   settingsUpdate: 'settings.update',
   processesGetAITools: 'processes.getAITools',
+  processesPollNow: 'processes.pollNow',
+  processesChanged: 'processes.changed',
   iconsGetAppIcon: 'icons.getAppIcon',
   windowMinimize: 'window.minimize',
   windowMaximize: 'window.maximize',
@@ -37,4 +39,3 @@ export const IPC_CHANNELS = {
   // Break Reminder
   breakReminderNotify: 'breakReminder.notify'
 } as const;
-

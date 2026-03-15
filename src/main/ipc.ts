@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import type { AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
+import type { AIToolProcess, AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
 import { IPC_CHANNELS } from '../shared/ipc';
-import { scanBackgroundProcesses } from './tracker/process-scanner';
+import { BackgroundProcessTracker, scanBackgroundProcesses } from './tracker/process-scanner';
 import { FocusService } from './focus/focus-service';
 import { AppLimitChecker } from './focus/app-limit-checker';
 import { checkForUpdatesNow } from './updater';
@@ -85,11 +85,11 @@ const tokenToCandidatePaths = (token: string, systemRoot: string): string[] => {
 
   for (const localToken of localTokens) {
     if (path.isAbsolute(localToken)) {
-        continue;
+      continue;
     }
 
     if (localToken.includes('\\') || localToken.includes('/')) {
-        continue;
+      continue;
     }
 
     candidates.add(path.join(systemRoot, 'System32', localToken));
@@ -152,6 +152,13 @@ const buildIconCandidates = (appName: string, exePath: string | null): string[] 
   return candidates;
 };
 
+const mapProcessesForRenderer = (processes: Map<string, { name: string; running: boolean }>): AIToolProcess[] =>
+  Array.from(processes.entries()).map(([id, info]) => ({
+    id,
+    name: info.name,
+    running: info.running
+  }));
+
 export const registerIpcHandlers = (
   database: ArkWatchDatabase,
   tracker: ActivityTrackerService,
@@ -159,7 +166,8 @@ export const registerIpcHandlers = (
   onTrackerStatusChanged: () => void,
   getMainWindow?: () => BrowserWindow | null,
   focusService?: FocusService,
-  appLimitChecker?: AppLimitChecker
+  appLimitChecker?: AppLimitChecker,
+  bgTracker?: BackgroundProcessTracker
 ): void => {
   ipcMain.handle(IPC_CHANNELS.trackerGetStatus, () => {
     return tracker.getStatus();
@@ -196,6 +204,23 @@ export const registerIpcHandlers = (
     sendTrackerStatus(status);
   });
 
+  const sendProcessesChanged = (processes: ReadonlyArray<AIToolProcess>): void => {
+    if (!getMainWindow) {
+      return;
+    }
+
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    mainWindow.webContents.send(IPC_CHANNELS.processesChanged, processes);
+  };
+
+  bgTracker?.onProcessesChanged((processes) => {
+    sendProcessesChanged(processes);
+  });
+
   ipcMain.handle(IPC_CHANNELS.statsGetSummary, (_event, range: DateRange) => {
     return database.getSummary(range);
   });
@@ -230,12 +255,29 @@ export const registerIpcHandlers = (
   });
 
   ipcMain.handle(IPC_CHANNELS.processesGetAITools, async () => {
+    if (bgTracker) {
+      return bgTracker.getProcessesSnapshot();
+    }
+
     const processes = await scanBackgroundProcesses();
-    return Array.from(processes.entries()).map(([id, info]) => ({
-      id,
-      name: info.name,
-      running: info.running
-    }));
+    if (processes === null) {
+      throw new Error('AI process scan failed');
+    }
+
+    return mapProcessesForRenderer(processes);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.processesPollNow, async () => {
+    if (bgTracker) {
+      return bgTracker.pollNow();
+    }
+
+    const processes = await scanBackgroundProcesses();
+    if (processes === null) {
+      throw new Error('AI process scan failed');
+    }
+
+    return mapProcessesForRenderer(processes);
   });
 
   ipcMain.handle(
@@ -378,4 +420,3 @@ export const registerIpcHandlers = (
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 };
-

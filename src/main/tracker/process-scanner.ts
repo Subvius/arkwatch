@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { SessionInput } from '../../shared/types';
+import type { AIToolProcess, SessionInput } from '../../shared/types';
 import type { ActiveApp } from './types';
 
 const execAsync = promisify(exec);
@@ -64,9 +64,35 @@ export const mapProcessNamesToAITools = (processNames: string[]): Map<string, Ba
   return results;
 };
 
-export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
-  const results = mapProcessNamesToAITools([]);
+const toProcessSnapshot = (processes: Map<string, BackgroundProcess>): ReadonlyArray<AIToolProcess> =>
+  PROCESS_RULES.map((rule) => {
+    const info = processes.get(rule.id);
+    return {
+      id: rule.id,
+      name: info?.name ?? rule.appName,
+      running: info?.running ?? false
+    } satisfies AIToolProcess;
+  });
 
+const areSnapshotsEqual = (left: ReadonlyArray<AIToolProcess>, right: ReadonlyArray<AIToolProcess>): boolean =>
+  left.length === right.length &&
+  left.every((item, index) => {
+    const other = right[index];
+    return other !== undefined && item.id === other.id && item.name === other.name && item.running === other.running;
+  });
+
+const notifyListener = (
+  listener: (processes: ReadonlyArray<AIToolProcess>) => void,
+  processes: ReadonlyArray<AIToolProcess>
+): void => {
+  try {
+    listener(processes);
+  } catch (error) {
+    console.error('[process-scanner] process listener failed', error);
+  }
+};
+
+export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess> | null> => {
   try {
     const { stdout } = await execAsync('tasklist /FO CSV /NH', {
       windowsHide: true,
@@ -74,11 +100,10 @@ export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundP
     });
 
     return mapProcessNamesToAITools(parseTasklistCsvOutput(stdout));
-  } catch {
-    // Silently fail - process scanning is best-effort
+  } catch (error) {
+    console.error('[process-scanner] background scan failed', error);
+    return null;
   }
-
-  return results;
 };
 
 type ActiveSession = {
@@ -89,6 +114,9 @@ type ActiveSession = {
 export class BackgroundProcessTracker {
   private activeSessions = new Map<string, ActiveSession>();
   private intervalId: NodeJS.Timeout | null = null;
+  private readonly listeners = new Set<(processes: ReadonlyArray<AIToolProcess>) => void>();
+  private lastSnapshot: ReadonlyArray<AIToolProcess> = toProcessSnapshot(mapProcessNamesToAITools([]));
+  private pollInFlight: Promise<void> | null = null;
 
   constructor(
     private readonly persistSession: (session: SessionInput) => Promise<void>,
@@ -102,6 +130,19 @@ export class BackgroundProcessTracker {
     return { appName: session.rule.appName, exePath: session.rule.exePath };
   }
 
+  getProcessesSnapshot(): ReadonlyArray<AIToolProcess> {
+    return this.lastSnapshot;
+  }
+
+  onProcessesChanged(callback: (processes: ReadonlyArray<AIToolProcess>) => void): () => void {
+    this.listeners.add(callback);
+    notifyListener(callback, this.lastSnapshot);
+
+    return () => {
+      this.listeners.delete(callback);
+    };
+  }
+
   start(): void {
     this.intervalId = setInterval(() => {
       void this.poll();
@@ -110,10 +151,20 @@ export class BackgroundProcessTracker {
     void this.poll();
   }
 
+  async pollNow(): Promise<ReadonlyArray<AIToolProcess>> {
+    await this.poll();
+    return this.lastSnapshot;
+  }
+
   async stop(): Promise<void> {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+
+    const inFlightPoll = this.pollInFlight;
+    if (inFlightPoll) {
+      await inFlightPoll;
     }
 
     // Flush all active sessions
@@ -122,32 +173,64 @@ export class BackgroundProcessTracker {
       await this.flush(id, session, now);
     }
     this.activeSessions.clear();
+    this.publishSnapshot(mapProcessNamesToAITools([]));
+  }
+
+  private publishSnapshot(processes: Map<string, BackgroundProcess>): void {
+    const nextSnapshot = toProcessSnapshot(processes);
+    if (areSnapshotsEqual(this.lastSnapshot, nextSnapshot)) {
+      return;
+    }
+
+    this.lastSnapshot = nextSnapshot;
+    for (const listener of this.listeners) {
+      notifyListener(listener, nextSnapshot);
+    }
   }
 
   private async poll(): Promise<void> {
-    const processes = await scanBackgroundProcesses();
-    const now = new Date();
+    if (this.pollInFlight) {
+      await this.pollInFlight;
+      return;
+    }
 
-    for (const rule of PROCESS_RULES) {
-      const info = processes.get(rule.id);
-      const isRunning = info?.running ?? false;
-      const existing = this.activeSessions.get(rule.id);
+    this.pollInFlight = (async () => {
+      const processes = await scanBackgroundProcesses();
+      if (processes === null) {
+        return;
+      }
 
-      if (isRunning && !existing) {
-        // Process just started - begin tracking
-        this.activeSessions.set(rule.id, { rule, startedAt: now });
-      } else if (!isRunning && existing) {
-        // Process stopped - flush the session
-        await this.flush(rule.id, existing, now);
-        this.activeSessions.delete(rule.id);
-      } else if (isRunning && existing) {
-        // Still running - checkpoint every 30s to avoid data loss
-        const elapsed = (now.getTime() - existing.startedAt.getTime()) / 1000;
-        if (elapsed >= 30) {
-          await this.flush(rule.id, existing, now);
+      const now = new Date();
+
+      this.publishSnapshot(processes);
+
+      for (const rule of PROCESS_RULES) {
+        const info = processes.get(rule.id);
+        const isRunning = info?.running ?? false;
+        const existing = this.activeSessions.get(rule.id);
+
+        if (isRunning && !existing) {
+          // Process just started - begin tracking
           this.activeSessions.set(rule.id, { rule, startedAt: now });
+        } else if (!isRunning && existing) {
+          // Process stopped - flush the session
+          await this.flush(rule.id, existing, now);
+          this.activeSessions.delete(rule.id);
+        } else if (isRunning && existing) {
+          // Still running - checkpoint every 30s to avoid data loss
+          const elapsed = (now.getTime() - existing.startedAt.getTime()) / 1000;
+          if (elapsed >= 30) {
+            await this.flush(rule.id, existing, now);
+            this.activeSessions.set(rule.id, { rule, startedAt: now });
+          }
         }
       }
+    })();
+
+    try {
+      await this.pollInFlight;
+    } finally {
+      this.pollInFlight = null;
     }
   }
 
@@ -166,3 +249,7 @@ export class BackgroundProcessTracker {
     });
   }
 }
+
+
+
+

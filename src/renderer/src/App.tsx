@@ -153,6 +153,8 @@ export const App = (): React.JSX.Element => {
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
   const prevAppRef = React.useRef<string | null>(null);
+  const processStateVersionRef = React.useRef(0);
+  const processPullRequestRef = React.useRef(0);
 
   // Track dark mode for theme-dependent configs
   const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
@@ -165,19 +167,44 @@ export const App = (): React.JSX.Element => {
 
   const aiToolConfigs = React.useMemo(() => getAITools(isDark), [isDark]);
 
-  // Track window focus for pausing mascot animations when app is in background
-  // Default to true — Electron window is focused on launch even if document.hasFocus() briefly returns false
+  // Track window focus for pausing mascot animations when app is in background.
+  // Tray restore on Windows can miss a normal browser focus event, so sync from both
+  // window focus and document visibility, and force a refresh after restore.
   const [appFocused, setAppFocused] = React.useState(true);
+  const syncAppFocused = React.useCallback((): void => {
+    if (document.visibilityState === 'hidden') {
+      setAppFocused(false);
+      return;
+    }
+
+    setAppFocused(document.hasFocus());
+  }, []);
+
   React.useEffect(() => {
     const onFocus = (): void => setAppFocused(true);
     const onBlur = (): void => setAppFocused(false);
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        setAppFocused(false);
+        return;
+      }
+
+      window.setTimeout(syncAppFocused, 50);
+    };
+
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const initialSync = window.setTimeout(syncAppFocused, 100);
+
     return () => {
+      window.clearTimeout(initialSync);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [syncAppFocused]);
 
   const loadStatus = React.useCallback(async () => {
     const next = await window.arkwatch.tracker.getStatus();
@@ -216,7 +243,18 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const loadProcesses = React.useCallback(async () => {
+    const requestId = processPullRequestRef.current + 1;
+    processPullRequestRef.current = requestId;
+
+    await window.arkwatch.processes.pollNow();
+
+    const pushVersionAtRequest = processStateVersionRef.current;
     const processes = await window.arkwatch.processes.getAITools();
+
+    if (requestId !== processPullRequestRef.current || pushVersionAtRequest < processStateVersionRef.current) {
+      return;
+    }
+
     setAiProcesses(processes);
   }, []);
 
@@ -244,6 +282,39 @@ export const App = (): React.JSX.Element => {
     setFocusTodayCount(count);
   }, []);
 
+  const refreshLiveState = React.useCallback(async (markLoaded = false): Promise<boolean> => {
+    const results = await Promise.allSettled([
+      loadStatus(),
+      loadData(),
+      loadAIStats(),
+      loadProcesses(),
+      loadFocusData()
+    ]);
+
+    let allFulfilled = true;
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        allFulfilled = false;
+        console.error('[runtime] live refresh failed', result.reason);
+      }
+    }
+
+    if (!allFulfilled) {
+      if (markLoaded || !dataLoaded) {
+        console.error('[bootstrap] critical startup refresh incomplete; keeping skeleton visible');
+      }
+
+      return false;
+    }
+
+    if (!dataLoaded) {
+      setDataLoaded(true);
+    }
+
+    return true;
+  }, [dataLoaded, loadAIStats, loadData, loadFocusData, loadProcesses, loadStatus]);
+
   const loadAppLimits = React.useCallback(async () => {
     const limits = await window.arkwatch.appLimits.getAll();
     setAppLimits(limits);
@@ -257,16 +328,13 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   React.useEffect(() => {
-    void Promise.allSettled([loadStatus(), loadData(), loadAIStats(), loadProcesses(), loadSettings(), loadFocusData()])
+    void Promise.allSettled([loadSettings(), refreshLiveState(true)])
       .then((results) => {
         for (const result of results) {
           if (result.status === 'rejected') {
             console.error('[bootstrap] initial load failed', result.reason);
           }
         }
-      })
-      .finally(() => {
-        setDataLoaded(true);
       });
 
     const dataTimer = window.setInterval(() => {
@@ -276,13 +344,13 @@ export const App = (): React.JSX.Element => {
 
     const processTimer = window.setInterval(() => {
       void loadProcesses();
-    }, 15_000);
+    }, 30_000);
 
     return () => {
       window.clearInterval(dataTimer);
       window.clearInterval(processTimer);
     };
-  }, [loadAIStats, loadData, loadFocusData, loadProcesses, loadSettings, loadStatus]);
+  }, [loadAIStats, loadData, loadProcesses, loadSettings, refreshLiveState]);
 
   React.useEffect(() => {
     if (!settingsOpen) {
@@ -386,12 +454,12 @@ export const App = (): React.JSX.Element => {
 
   React.useEffect(() => {
     return window.arkwatch.window.onRestoredFromTray(() => {
+      setAppFocused(true);
       elephantRef.current?.triggerGreeting();
-      void loadData();
-      void loadAIStats();
-      void loadProcesses();
+      void refreshLiveState();
+      window.setTimeout(syncAppFocused, 75);
     });
-  }, [loadAIStats, loadData, loadProcesses]);
+  }, [refreshLiveState, syncAppFocused]);
 
   React.useEffect(() => {
     return window.arkwatch.tracker.onStatusChanged((next) => {
@@ -406,16 +474,21 @@ export const App = (): React.JSX.Element => {
 
   React.useEffect(() => {
     const refresh = (): void => {
-      void loadData();
-      void loadAIStats();
-      void loadProcesses();
+      void refreshLiveState();
     };
 
     window.addEventListener('focus', refresh);
     return () => {
       window.removeEventListener('focus', refresh);
     };
-  }, [loadAIStats, loadData, loadProcesses]);
+  }, [refreshLiveState]);
+
+  React.useEffect(() => {
+    return window.arkwatch.processes.onChanged((processes) => {
+      processStateVersionRef.current += 1;
+      setAiProcesses(processes);
+    });
+  }, []);
 
   React.useEffect(() => {
     return window.arkwatch.focus.onStateChanged((state) => {
@@ -914,5 +987,8 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+
+
+
 
 
