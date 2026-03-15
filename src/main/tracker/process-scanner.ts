@@ -116,6 +116,7 @@ export class BackgroundProcessTracker {
   private intervalId: NodeJS.Timeout | null = null;
   private readonly listeners = new Set<(processes: ReadonlyArray<AIToolProcess>) => void>();
   private lastSnapshot: ReadonlyArray<AIToolProcess> = toProcessSnapshot(mapProcessNamesToAITools([]));
+  private pollInFlight: Promise<void> | null = null;
 
   constructor(
     private readonly persistSession: (session: SessionInput) => Promise<void>,
@@ -183,35 +184,48 @@ export class BackgroundProcessTracker {
   }
 
   private async poll(): Promise<void> {
-    const processes = await scanBackgroundProcesses();
-    if (processes === null) {
+    if (this.pollInFlight) {
+      await this.pollInFlight;
       return;
     }
 
-    const now = new Date();
+    this.pollInFlight = (async () => {
+      const processes = await scanBackgroundProcesses();
+      if (processes === null) {
+        return;
+      }
 
-    this.publishSnapshot(processes);
+      const now = new Date();
 
-    for (const rule of PROCESS_RULES) {
-      const info = processes.get(rule.id);
-      const isRunning = info?.running ?? false;
-      const existing = this.activeSessions.get(rule.id);
+      this.publishSnapshot(processes);
 
-      if (isRunning && !existing) {
-        // Process just started - begin tracking
-        this.activeSessions.set(rule.id, { rule, startedAt: now });
-      } else if (!isRunning && existing) {
-        // Process stopped - flush the session
-        await this.flush(rule.id, existing, now);
-        this.activeSessions.delete(rule.id);
-      } else if (isRunning && existing) {
-        // Still running - checkpoint every 30s to avoid data loss
-        const elapsed = (now.getTime() - existing.startedAt.getTime()) / 1000;
-        if (elapsed >= 30) {
-          await this.flush(rule.id, existing, now);
+      for (const rule of PROCESS_RULES) {
+        const info = processes.get(rule.id);
+        const isRunning = info?.running ?? false;
+        const existing = this.activeSessions.get(rule.id);
+
+        if (isRunning && !existing) {
+          // Process just started - begin tracking
           this.activeSessions.set(rule.id, { rule, startedAt: now });
+        } else if (!isRunning && existing) {
+          // Process stopped - flush the session
+          await this.flush(rule.id, existing, now);
+          this.activeSessions.delete(rule.id);
+        } else if (isRunning && existing) {
+          // Still running - checkpoint every 30s to avoid data loss
+          const elapsed = (now.getTime() - existing.startedAt.getTime()) / 1000;
+          if (elapsed >= 30) {
+            await this.flush(rule.id, existing, now);
+            this.activeSessions.set(rule.id, { rule, startedAt: now });
+          }
         }
       }
+    })();
+
+    try {
+      await this.pollInFlight;
+    } finally {
+      this.pollInFlight = null;
     }
   }
 
@@ -230,3 +244,6 @@ export class BackgroundProcessTracker {
     });
   }
 }
+
+
+
