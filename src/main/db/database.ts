@@ -499,6 +499,54 @@ export class ArkWatchDatabase {
     return row?.total ?? 0;
   }
 
+  async hasTrustedAppRecord(appName: string, exePath: string | null): Promise<boolean> {
+    const db = this.requireDb();
+    const normalizedAppName = appName.trim().toLowerCase();
+    const normalizedExePath = exePath?.trim() ? exePath.trim().toLowerCase() : null;
+
+    if (!normalizedAppName) {
+      return false;
+    }
+
+    const row = normalizedExePath
+      ? await db.get<{ found: number }>(
+          `
+          SELECT 1 AS found
+          FROM app_limits
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND LOWER(TRIM(COALESCE(exe_path, ''))) = ?
+          UNION
+          SELECT 1 AS found
+          FROM sessions
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND LOWER(TRIM(COALESCE(exe_path, ''))) = ?
+            AND ${VISIBLE_SESSIONS_SQL}
+          LIMIT 1
+          `,
+          normalizedAppName,
+          normalizedExePath,
+          normalizedAppName,
+          normalizedExePath
+        )
+      : await db.get<{ found: number }>(
+          `
+          SELECT 1 AS found
+          FROM app_limits
+          WHERE LOWER(TRIM(app_name)) = ?
+          UNION
+          SELECT 1 AS found
+          FROM sessions
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND ${VISIBLE_SESSIONS_SQL}
+          LIMIT 1
+          `,
+          normalizedAppName,
+          normalizedAppName
+        );
+
+    return Boolean(row?.found);
+  }
+
   // --- Focus Sessions ---
 
   async insertFocusSession(session: { startedAt: string; plannedDurationSec: number; label: string | null }): Promise<number> {

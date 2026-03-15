@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import path from 'node:path';
 import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import type { AIToolProcess, AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
@@ -208,18 +209,60 @@ export const registerIpcHandlers = (
     return mapProcessesForRenderer(processes);
   });
 
+  const getTrustedIconRequest = async (
+    appName: string,
+    exePath: string | null
+  ): Promise<{ trusted: boolean; trustedExePath: string | null }> => {
+    if (!appName.trim()) {
+      return { trusted: false, trustedExePath: null };
+    }
+
+    if (exePath && path.isAbsolute(exePath)) {
+      const trusted = await database.hasTrustedAppRecord(appName, exePath);
+      return { trusted, trustedExePath: trusted ? exePath : null };
+    }
+
+    const trusted = await database.hasTrustedAppRecord(appName, null);
+    return { trusted, trustedExePath: null };
+  };
+
+  ipcMain.handle(
+    IPC_CHANNELS.iconsGetAppInstallState,
+    async (_event, params: { appName: string; exePath: string | null }) => {
+      const appName = typeof params?.appName === 'string' ? params.appName : '';
+      const exePath = typeof params?.exePath === 'string' ? params.exePath : null;
+
+      if (!exePath || !path.isAbsolute(exePath)) {
+        return false;
+      }
+
+      const trustedRequest = await getTrustedIconRequest(appName, exePath);
+      if (!trustedRequest.trusted || !trustedRequest.trustedExePath) {
+        return false;
+      }
+
+      return pathExists(trustedRequest.trustedExePath);
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.iconsGetAppIcon,
     async (_event, params: { appName: string; exePath: string | null }) => {
       const appName = typeof params?.appName === 'string' ? params.appName : '';
       const exePath = typeof params?.exePath === 'string' ? params.exePath : null;
 
-      const requestKey = `${normalize(appName)}|${normalize(exePath ?? '')}`;
+      const trustedRequest = await getTrustedIconRequest(appName, exePath);
+      if (!trustedRequest.trusted) {
+        return null;
+      }
+
+      const trustedExePath = trustedRequest.trustedExePath;
+      const requestKey = `${normalize(appName)}|${normalize(trustedExePath ?? '')}`;
       if (iconByRequestKey.has(requestKey)) {
         return iconByRequestKey.get(requestKey) ?? null;
       }
 
-      const candidates = await buildIconCandidates(appName, exePath);
+      const candidates = await buildIconCandidates(appName, trustedExePath);
       const iconSizes: Array<'large' | 'normal' | 'small'> = ['large', 'normal', 'small'];
 
       for (const candidate of candidates) {

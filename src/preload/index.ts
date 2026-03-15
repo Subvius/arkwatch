@@ -45,7 +45,8 @@ const api: ArkWatchApi = {
     }
   },
   icons: {
-    getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params)
+    getAppIcon: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppIcon, params),
+    getAppInstallState: (params: { appName: string; exePath: string | null }) => ipcRenderer.invoke(IPC_CHANNELS.iconsGetAppInstallState, params)
   },
   focus: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.focusGetState),

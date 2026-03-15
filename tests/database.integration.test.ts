@@ -163,6 +163,22 @@ describe('ArkWatchDatabase', () => {
     expect(unknownUsage).toBe(0);
   });
 
+  it('recognizes trusted app records by app name and executable path', async () => {
+    await db.insertSession({
+      appName: 'Trusted App',
+      exePath: 'C:/Apps/Trusted/Trusted.exe',
+      startedAt: '2026-03-10T10:00:00.000Z',
+      endedAt: '2026-03-10T10:05:00.000Z',
+      durationSec: 300,
+      isIdleSegment: false,
+      source: 'focus-change'
+    });
+
+    expect(await db.hasTrustedAppRecord('Trusted App', 'C:/Apps/Trusted/Trusted.exe')).toBe(true);
+    expect(await db.hasTrustedAppRecord('Trusted App', null)).toBe(true);
+    expect(await db.hasTrustedAppRecord('Trusted App', 'C:/Apps/Trusted/Other.exe')).toBe(false);
+    expect(await db.hasTrustedAppRecord('Unknown App', 'C:/Apps/Trusted/Trusted.exe')).toBe(false);
+  });
   it('prefers the most recently seen executable path for top-app icon resolution', async () => {
     await db.insertSession({
       appName: 'Photos.exe',
