@@ -1,5 +1,6 @@
-import type { AnyIpcContract } from './ipc';
 import { preferencesContracts, systemDialogContracts } from './contracts';
+import type { EffectBridgeApi, EffectChannel } from './channels';
+export { EFFECT_CHANNELS, effectChannelValues, isEffectChannel } from './channels';
 
 export const effectContracts = {
   ...preferencesContracts,
@@ -7,12 +8,4 @@ export const effectContracts = {
 } as const;
 
 export type EffectContracts = typeof effectContracts;
-export type EffectChannel = EffectContracts[keyof EffectContracts]['channel'];
-
-export type EffectBridgeApi = {
-  invoke: (channel: EffectChannel, payload: unknown) => Promise<unknown>;
-};
-
-export const isEffectChannel = (value: string): value is EffectChannel =>
-  Object.values(effectContracts).some((contract: AnyIpcContract) => contract.channel === value);
-
+export type { EffectBridgeApi, EffectChannel };

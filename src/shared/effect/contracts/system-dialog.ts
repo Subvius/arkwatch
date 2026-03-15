@@ -1,4 +1,5 @@
 import { Schema } from 'effect';
+import { EFFECT_CHANNELS } from '../channels';
 import { defineIpcContract } from '../ipc';
 
 export const PickDirectoryResultSchema = Schema.Struct({
@@ -22,7 +23,7 @@ export class DialogFailureError extends Schema.TaggedError<DialogFailureError>(
 
 export const systemDialogContracts = {
   pickDirectory: defineIpcContract({
-    channel: 'effect.systemDialog.pickDirectory',
+    channel: EFFECT_CHANNELS.systemDialogPickDirectory,
     request: Schema.Struct({
       title: Schema.String,
       buttonLabel: Schema.optional(Schema.String)
@@ -31,5 +32,3 @@ export const systemDialogContracts = {
     error: Schema.Union(WindowUnavailableError, DialogFailureError)
   })
 } as const;
-
-

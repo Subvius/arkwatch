@@ -1,4 +1,5 @@
 import { Schema } from 'effect';
+import { EFFECT_CHANNELS } from '../channels';
 import { defineIpcContract, EmptyPayloadSchema } from '../ipc';
 
 export const ThemeSchema = Schema.Literal('light', 'dark');
@@ -29,13 +30,13 @@ export class PreferencesPersistenceError extends Schema.TaggedError<PreferencesP
 
 export const preferencesContracts = {
   get: defineIpcContract({
-    channel: 'effect.preferences.get',
+    channel: EFFECT_CHANNELS.preferencesGet,
     request: EmptyPayloadSchema,
     success: PreferencesSchema,
     error: PreferencesPersistenceError
   }),
   update: defineIpcContract({
-    channel: 'effect.preferences.update',
+    channel: EFFECT_CHANNELS.preferencesUpdate,
     request: Schema.Struct({
       patch: PreferencesPatchSchema
     }),
@@ -43,5 +44,3 @@ export const preferencesContracts = {
     error: PreferencesPersistenceError
   })
 } as const;
-
-

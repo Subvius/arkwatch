@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import { isEffectChannel, type EffectBridgeApi } from '../shared/effect';
+import { isEffectChannel, type EffectBridgeApi } from '../shared/effect/channels';
 
 export const effectBridgeApi: EffectBridgeApi = {
   invoke: (channel, payload) => {

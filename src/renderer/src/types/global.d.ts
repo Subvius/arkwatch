@@ -1,4 +1,4 @@
-import type { EffectBridgeApi } from '../../../shared/effect';
+import type { EffectBridgeApi } from '../../../shared/effect/channels';
 import type { ArkWatchApi } from '../../../shared/types';
 
 declare global {
