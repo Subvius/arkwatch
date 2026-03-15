@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ArkWatchApi, AppLimit, AppSettings, DateRange, FocusSchedule, FocusSessionState, AppLimitStatus, ProgressInfo, TrackerStatus } from '../shared/types';
 import { IPC_CHANNELS } from '../shared/ipc';
+import { effectBridgeApi } from './effect-bridge';
 
 const api: ArkWatchApi = {
   tracker: {
@@ -85,5 +86,4 @@ const api: ArkWatchApi = {
 };
 
 contextBridge.exposeInMainWorld('arkwatch', api);
-
-
+contextBridge.exposeInMainWorld('effectBridge', effectBridgeApi);
