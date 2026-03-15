@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AppWindow } from 'lucide-react';
 import type { TopAppStat } from '../../../shared/types';
 import { formatDuration } from '../lib/utils';
 import { detectAITool, getAITools } from '../lib/ai-tools';
@@ -77,26 +78,38 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
     exePath: string | null,
     aiTool: ReturnType<typeof detectAITool>
   ): React.JSX.Element => {
+    const iconFrameClassName = 'flex h-6 w-6 shrink-0 items-center justify-center';
+
     if (aiTool === 'claude') {
-      return <img src={claudeLogoUrl} alt="Claude icon" className="h-5 w-5 shrink-0" />;
+      return (
+        <span className={iconFrameClassName}>
+          <img src={claudeLogoUrl} alt="Claude icon" className="h-5 w-5 object-contain" />
+        </span>
+      );
     }
     if (aiTool === 'codex') {
-      return <img src={openaiLogoUrl} alt="Codex icon" className="h-5 w-5 shrink-0 dark:invert" />;
+      return (
+        <span className={iconFrameClassName}>
+          <img src={openaiLogoUrl} alt="Codex icon" className="h-5 w-5 object-contain dark:invert" />
+        </span>
+      );
     }
 
     const nativeIcon = nativeIconsByRowKey[rowIconKey(appName, exePath)];
     if (nativeIcon) {
-      return <img src={nativeIcon} alt={`${appName} icon`} className="h-5 w-5 shrink-0 rounded" />;
+      return (
+        <span className={iconFrameClassName}>
+          <img src={nativeIcon} alt={`${appName} icon`} className="h-5 w-5 rounded object-contain" />
+        </span>
+      );
     }
 
-    const initial = appName.trim().charAt(0).toUpperCase() || '?';
     return (
-      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--border))] text-[11px] font-semibold text-[hsl(var(--muted))]">
-        {initial}
+      <span className={iconFrameClassName}>
+        <AppWindow className="h-5 w-5 text-[hsl(var(--muted))]" aria-hidden="true" strokeWidth={1.75} />
       </span>
     );
   };
-
   return (
     <Table>
       <TableHeader>
