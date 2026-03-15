@@ -63,12 +63,24 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
 
       const icons: Record<string, string> = {};
       for (const app of apps) {
+        if (cancelled) {
+          break;
+        }
+
         try {
           const icon = await window.arkwatch.icons.getAppIcon({ appName: app.appName, exePath: app.exePath });
+          if (cancelled) {
+            break;
+          }
+
           if (icon) {
             icons[getAppIconCacheKey(app.appName, app.exePath)] = icon;
           }
         } catch {
+          if (cancelled) {
+            break;
+          }
+
           // ignore
         }
       }
@@ -93,21 +105,47 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
   }, [adding]);
 
   React.useEffect(() => {
+    let cancelled = false;
+
     const loadLimitIcons = async (): Promise<void> => {
       const icons: Record<string, string> = {};
       for (const limit of limits) {
+        if (cancelled) {
+          break;
+        }
+
         try {
           const icon = await window.arkwatch.icons.getAppIcon({ appName: limit.appName, exePath: limit.exePath });
+          if (cancelled) {
+            break;
+          }
+
           if (icon) {
             icons[getAppIconCacheKey(limit.appName, limit.exePath)] = icon;
           }
         } catch {
+          if (cancelled) {
+            break;
+          }
+
           // ignore
         }
       }
+
+      if (cancelled) {
+        return;
+      }
+
       setNativeIcons((prev) => ({ ...prev, ...icons }));
     };
-    if (limits.length > 0) void loadLimitIcons();
+
+    if (limits.length > 0) {
+      void loadLimitIcons();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [limits]);
 
   const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName) && !isMissingLocalInstall(app, nativeIcons, pickerIconsLoaded));

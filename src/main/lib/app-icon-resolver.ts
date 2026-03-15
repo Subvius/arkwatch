@@ -223,8 +223,19 @@ const getPackageAssetPriority = (fileName: string, requestedBaseName: string): n
 };
 
 const buildManifestImageCandidates = async (packageRoot: string, relativePath: string): Promise<IconCandidate[]> => {
-  const normalizedRelativePath = relativePath.replace(/[\\/]+/g, path.sep);
-  const resolvedAssetPath = path.join(packageRoot, normalizedRelativePath);
+  const packageRootResolved = path.resolve(packageRoot);
+  const sanitizedRelativePath = relativePath.replace(/^[\\/]+/, '').replace(/[\\/]+/g, path.sep);
+  if (!sanitizedRelativePath) {
+    return [];
+  }
+
+  const resolvedAssetPath = path.resolve(packageRootResolved, sanitizedRelativePath);
+  const relativeToRoot = path.relative(packageRootResolved, resolvedAssetPath);
+  if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+    console.warn('[arkwatch] Ignoring app icon manifest path outside package root:', relativePath);
+    return [];
+  }
+
   const assetDirectory = path.dirname(resolvedAssetPath);
   const assetExtension = path.extname(resolvedAssetPath);
   const assetBaseName = path.basename(resolvedAssetPath, assetExtension).toLowerCase();

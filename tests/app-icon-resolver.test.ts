@@ -74,6 +74,34 @@ describe('app icon resolver helpers', () => {
     });
   });
 
+  it('ignores manifest image paths that escape the package root', async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'arkwatch-icon-test-'));
+    tempDirectories.push(tempDirectory);
+
+    const packageRoot = path.join(tempDirectory, 'Sample.Package_1.0.0.0_x64__test');
+    const executableDirectory = path.join(packageRoot, 'App');
+    const exePath = path.join(executableDirectory, 'Sample.exe');
+    const escapedPath = path.join(tempDirectory, 'outside.png');
+
+    await fs.mkdir(executableDirectory, { recursive: true });
+    await fs.writeFile(
+      path.join(packageRoot, 'AppxManifest.xml'),
+      '<?xml version="1.0" encoding="utf-8"?>\n' +
+        '<Package>\n' +
+        '  <Applications>\n' +
+        '    <Application Id="App" Executable="App\\Sample.exe">\n' +
+        '      <uap:VisualElements Square44x44Logo="..\\outside.png" />\n' +
+        '    </Application>\n' +
+        '  </Applications>\n' +
+        '</Package>'
+    );
+    await fs.writeFile(escapedPath, '');
+
+    const candidates = await buildIconCandidates('Sample', exePath);
+
+    expect(candidates).not.toContainEqual({ kind: 'image-file', path: escapedPath });
+  });
+
   it('keeps the fallback generic for any executable path, not just Discord', async () => {
     const exePath = 'D:\\Tools\\WidgetSuite\\build-42\\Widget.exe';
     const candidates = await buildIconCandidates('Completely Different Name', exePath);

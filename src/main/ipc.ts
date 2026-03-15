@@ -10,8 +10,46 @@ import { AppLimitChecker } from './focus/app-limit-checker';
 import { checkForUpdatesNow } from './updater';
 import { buildIconCandidates, type IconCandidate } from './lib/app-icon-resolver';
 
-const iconByRequestKey = new Map<string, string | null>();
-const iconByCandidateKey = new Map<string, string | null>();
+type BoundedCache<K, V> = {
+  has: (key: K) => boolean;
+  get: (key: K) => V | undefined;
+  set: (key: K, value: V) => void;
+  delete: (key: K) => void;
+};
+
+const createBoundedCache = <K, V>(maxSize: number): BoundedCache<K, V> => {
+  const store = new Map<K, V>();
+
+  const evictOldest = (): void => {
+    while (store.size > maxSize) {
+      const oldestKey = store.keys().next().value as K | undefined;
+      if (oldestKey === undefined) {
+        break;
+      }
+
+      store.delete(oldestKey);
+    }
+  };
+
+  return {
+    has: (key) => store.has(key),
+    get: (key) => store.get(key),
+    set: (key, value) => {
+      if (store.has(key)) {
+        store.delete(key);
+      }
+
+      store.set(key, value);
+      evictOldest();
+    },
+    delete: (key) => {
+      store.delete(key);
+    }
+  };
+};
+
+const iconByRequestKey = createBoundedCache<string, string | null>(512);
+const iconByCandidateKey = createBoundedCache<string, string | null>(2048);
 
 const genericExeIconBySize = new Map<'large' | 'normal' | 'small', string | null>();
 
