@@ -143,6 +143,7 @@ export type ArkWatchApi = {
   };
   icons: {
     getAppIcon: (params: { appName: string; exePath: string | null }) => Promise<string | null>;
+    getAppInstallState: (params: { appName: string; exePath: string | null }) => Promise<boolean>;
   };
   focus: {
     getState: () => Promise<FocusSessionState>;

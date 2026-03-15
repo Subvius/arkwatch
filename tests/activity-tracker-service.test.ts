@@ -4,11 +4,20 @@ import type { ActivitySource } from '../src/main/tracker/types';
 import type { ArkWatchDatabase } from '../src/main/db/database';
 
 const appA = { appName: 'Code.exe', exePath: 'C:/Code.exe' };
+const lockApp = {
+  appName: 'LockApp.exe',
+  exePath: 'C:/Windows/SystemApps/Microsoft.LockApp_cw5n1h2txyewy/LockApp.exe'
+};
 
-const createMockDatabase = (): ArkWatchDatabase =>
-  ({
-    insertSession: vi.fn(async () => undefined)
-  } as unknown as ArkWatchDatabase);
+const createMockDatabase = (): { database: ArkWatchDatabase; insertSession: ReturnType<typeof vi.fn> } => {
+  const insertSession = vi.fn(async () => undefined);
+  return {
+    database: ({
+      insertSession
+    } as unknown) as ArkWatchDatabase,
+    insertSession
+  };
+};
 
 describe('ActivityTrackerService', () => {
   it('keeps status updates working when idle-time lookup fails', async () => {
@@ -21,7 +30,8 @@ describe('ActivityTrackerService', () => {
       onResume: vi.fn()
     };
 
-    const service = new ActivityTrackerService(source, createMockDatabase(), 120, 60_000);
+    const mockDb = createMockDatabase();
+    const service = new ActivityTrackerService(source, mockDb.database, 120, 60_000);
     await service.start();
 
     expect(service.getStatus()).toMatchObject({
@@ -40,7 +50,8 @@ describe('ActivityTrackerService', () => {
       onResume: vi.fn()
     };
 
-    const service = new ActivityTrackerService(source, createMockDatabase(), 120, 60_000);
+    const mockDb = createMockDatabase();
+    const service = new ActivityTrackerService(source, mockDb.database, 120, 60_000);
     await service.start();
 
     expect(service.getStatus()).toMatchObject({
@@ -60,4 +71,27 @@ describe('ActivityTrackerService', () => {
 
     await service.stop();
   });
+
+  it('ignores lock screen apps instead of tracking them as foreground usage', async () => {
+    const source: ActivitySource = {
+      getActiveApp: vi.fn(async () => lockApp),
+      getIdleSeconds: vi.fn(() => 0),
+      onSuspend: vi.fn(),
+      onResume: vi.fn()
+    };
+
+    const mockDb = createMockDatabase();
+    const service = new ActivityTrackerService(source, mockDb.database, 120, 60_000);
+    await service.start();
+
+    expect(service.getStatus()).toMatchObject({
+      currentApp: null,
+      idle: false
+    });
+
+    await service.stop();
+
+    expect(mockDb.insertSession).not.toHaveBeenCalled();
+  });
 });
+

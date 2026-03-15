@@ -4,6 +4,8 @@ import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import type { AppLimit, TopAppStat } from '../../../../shared/types';
 import { formatDuration } from '../../lib/utils';
+import { getAppIconCacheKey } from '../../lib/app-icon';
+import { AppIcon } from '../AppIcon';
 
 type AppLimitsSettingsProps = {
   limits: AppLimit[];
@@ -13,61 +15,170 @@ type AppLimitsSettingsProps = {
 
 const STEP_SECONDS = 15 * 60; // 15-min increments
 
+const isMissingLocalInstall = (app: TopAppStat, installStates: Record<string, boolean>): boolean => {
+  const exePath = app.exePath?.trim();
+  if (!exePath) {
+    return false;
+  }
+
+  const normalizedPath = exePath.replace(/\//g, '\\').toLowerCase();
+  if (!normalizedPath.includes('\\appdata\\local\\programs\\')) {
+    return false;
+  }
+
+  return installStates[getAppIconCacheKey(app.appName, app.exePath)] === false;
+};
+
 export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSettingsProps): React.JSX.Element => {
   const [adding, setAdding] = React.useState(false);
   const [availableApps, setAvailableApps] = React.useState<TopAppStat[]>([]);
-  const [selectedApp, setSelectedApp] = React.useState<TopAppStat | null>(null);
+  const [selectedApp, setSelectedApp] = React.useState<TopAppStat | undefined>(undefined);
   const [limitSeconds, setLimitSeconds] = React.useState(STEP_SECONDS * 4); // 60 min default
   const [nativeIcons, setNativeIcons] = React.useState<Record<string, string>>({});
+  const [installStates, setInstallStates] = React.useState<Record<string, boolean>>({});
+  const [pickerIconsLoaded, setPickerIconsLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    if (!adding) return;
+    if (!adding) {
+      setSelectedApp(undefined);
+      setPickerIconsLoaded(false);
+      setInstallStates({});
+      return;
+    }
+
+    let cancelled = false;
     const load = async (): Promise<void> => {
+      setSelectedApp(undefined);
+      setPickerIconsLoaded(false);
+      setInstallStates({});
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).toISOString();
       const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
       const apps = await window.arkwatch.stats.getTopApps({ from, to, limit: 50 });
+      if (cancelled) {
+        return;
+      }
+
       setAvailableApps(apps);
 
       const icons: Record<string, string> = {};
+      const nextInstallStates: Record<string, boolean> = {};
       for (const app of apps) {
+        if (cancelled) {
+          break;
+        }
+
         try {
+          const cacheKey = getAppIconCacheKey(app.appName, app.exePath);
+          const isInstalled = await window.arkwatch.icons.getAppInstallState({ appName: app.appName, exePath: app.exePath });
+          if (cancelled) {
+            break;
+          }
+
+          nextInstallStates[cacheKey] = isInstalled;
+
           const icon = await window.arkwatch.icons.getAppIcon({ appName: app.appName, exePath: app.exePath });
-          if (icon) icons[app.appName] = icon;
-        } catch { /* ignore */ }
+          if (cancelled) {
+            break;
+          }
+
+          if (icon) {
+            icons[cacheKey] = icon;
+          }
+        } catch {
+          if (cancelled) {
+            break;
+          }
+
+          // ignore
+        }
       }
-      setNativeIcons(icons);
+
+      if (cancelled) {
+        return;
+      }
+
+      setInstallStates(nextInstallStates);
+      setNativeIcons((prev) => ({ ...prev, ...icons }));
+      setPickerIconsLoaded(true);
     };
-    void load();
+
+    void load().catch(() => {
+      if (!cancelled) {
+        setAvailableApps([]);
+        setSelectedApp(undefined);
+        setInstallStates({});
+        setPickerIconsLoaded(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [adding]);
 
-  // Load icons for existing limits
   React.useEffect(() => {
+    let cancelled = false;
+
     const loadLimitIcons = async (): Promise<void> => {
       const icons: Record<string, string> = {};
       for (const limit of limits) {
+        if (cancelled) {
+          break;
+        }
+
         try {
           const icon = await window.arkwatch.icons.getAppIcon({ appName: limit.appName, exePath: limit.exePath });
-          if (icon) icons[limit.appName] = icon;
-        } catch { /* ignore */ }
+          if (cancelled) {
+            break;
+          }
+
+          if (icon) {
+            icons[getAppIconCacheKey(limit.appName, limit.exePath)] = icon;
+          }
+        } catch {
+          if (cancelled) {
+            break;
+          }
+
+          // ignore
+        }
       }
+
+      if (cancelled) {
+        return;
+      }
+
       setNativeIcons((prev) => ({ ...prev, ...icons }));
     };
-    if (limits.length > 0) void loadLimitIcons();
+
+    if (limits.length > 0) {
+      void loadLimitIcons();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [limits]);
 
-  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName));
+  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName) && !isMissingLocalInstall(app, installStates));
 
   const handleAdd = (): void => {
-    if (!selectedApp) return;
+    const nextApp = selectedApp ? filteredApps.find((app) => app.appName === selectedApp.appName) : undefined;
+    if (!nextApp) {
+      setSelectedApp(undefined);
+      return;
+    }
+
     onUpsert({
-      appName: selectedApp.appName,
-      exePath: selectedApp.exePath,
+      appName: nextApp.appName,
+      exePath: nextApp.exePath,
       dailyLimitSeconds: limitSeconds,
       enabled: true
     });
     setAdding(false);
-    setSelectedApp(null);
+    setSelectedApp(undefined);
+    setPickerIconsLoaded(false);
     setLimitSeconds(STEP_SECONDS * 4);
   };
 
@@ -80,13 +191,12 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
       {limits.map((limit) => (
         <div key={limit.id} className="flex items-center justify-between rounded-md border px-3 py-2">
           <div className="flex items-center gap-2">
-            {nativeIcons[limit.appName] ? (
-              <img src={nativeIcons[limit.appName]} alt="" className="h-5 w-5 shrink-0 rounded" />
-            ) : (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[hsl(var(--border))] text-[10px] font-semibold text-[hsl(var(--muted))]">
-                {limit.appName.charAt(0).toUpperCase()}
-              </span>
-            )}
+            <AppIcon
+              appName={limit.appName}
+              exePath={limit.exePath}
+              nativeIconSrc={nativeIcons[getAppIconCacheKey(limit.appName, limit.exePath)] ?? null}
+              size="md"
+            />
             <span className="text-sm font-medium">{limit.appName}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -105,8 +215,8 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
             <Select
               value={selectedApp?.appName ?? ''}
               onValueChange={(value) => {
-                const app = availableApps.find((a) => a.appName === value);
-                setSelectedApp(app ?? null);
+                const app = filteredApps.find((a) => a.appName === value);
+                setSelectedApp(app);
               }}
             >
               <SelectTrigger>
@@ -116,13 +226,12 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
                 {filteredApps.map((app) => (
                   <SelectItem key={app.appName} value={app.appName}>
                     <span className="flex items-center gap-2">
-                      {nativeIcons[app.appName] ? (
-                        <img src={nativeIcons[app.appName]} alt="" className="h-4 w-4 shrink-0 rounded" />
-                      ) : (
-                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[hsl(var(--border))] text-[8px] font-semibold text-[hsl(var(--muted))]">
-                          {app.appName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <AppIcon
+                        appName={app.appName}
+                        exePath={app.exePath}
+                        nativeIconSrc={nativeIcons[getAppIconCacheKey(app.appName, app.exePath)] ?? null}
+                        size="sm"
+                      />
                       {app.appName}
                     </span>
                   </SelectItem>
@@ -157,7 +266,7 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
 
           <div className="flex gap-2">
             <Button size="sm" disabled={!selectedApp} onClick={handleAdd}>Add Limit</Button>
-            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setSelectedApp(undefined); setPickerIconsLoaded(false); }}>Cancel</Button>
           </div>
         </div>
       ) : (
@@ -169,3 +278,4 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
     </div>
   );
 };
+

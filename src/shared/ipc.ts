@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   processesPollNow: 'processes.pollNow',
   processesChanged: 'processes.changed',
   iconsGetAppIcon: 'icons.getAppIcon',
+  iconsGetAppInstallState: 'icons.getAppInstallState',
   windowMinimize: 'window.minimize',
   windowMaximize: 'window.maximize',
   windowClose: 'window.close',

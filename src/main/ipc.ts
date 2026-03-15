@@ -1,6 +1,6 @@
+import { access } from 'node:fs/promises';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import type { AIToolProcess, AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
 import { ActivityTrackerService } from './tracker/activity-tracker-service';
@@ -9,9 +9,48 @@ import { BackgroundProcessTracker, scanBackgroundProcesses } from './tracker/pro
 import { FocusService } from './focus/focus-service';
 import { AppLimitChecker } from './focus/app-limit-checker';
 import { checkForUpdatesNow } from './updater';
+import { buildIconCandidates, type IconCandidate } from './lib/app-icon-resolver';
 
-const iconByRequestKey = new Map<string, string | null>();
-const iconByCandidatePath = new Map<string, string | null>();
+type BoundedCache<K, V> = {
+  has: (key: K) => boolean;
+  get: (key: K) => V | undefined;
+  set: (key: K, value: V) => void;
+  delete: (key: K) => void;
+};
+
+const createBoundedCache = <K, V>(maxSize: number): BoundedCache<K, V> => {
+  const store = new Map<K, V>();
+
+  const evictOldest = (): void => {
+    while (store.size > maxSize) {
+      const oldestKey = store.keys().next().value as K | undefined;
+      if (oldestKey === undefined) {
+        break;
+      }
+
+      store.delete(oldestKey);
+    }
+  };
+
+  return {
+    has: (key) => store.has(key),
+    get: (key) => store.get(key),
+    set: (key, value) => {
+      if (store.has(key)) {
+        store.delete(key);
+      }
+
+      store.set(key, value);
+      evictOldest();
+    },
+    delete: (key) => {
+      store.delete(key);
+    }
+  };
+};
+
+const iconByRequestKey = createBoundedCache<string, string | null>(512);
+const iconByCandidateKey = createBoundedCache<string, string | null>(2048);
 
 const genericExeIconBySize = new Map<'large' | 'normal' | 'small', string | null>();
 
@@ -30,126 +69,16 @@ const getGenericExeIcon = async (size: 'large' | 'normal' | 'small'): Promise<st
     return null;
   }
 };
+
 const normalize = (value: string): string => value.trim().toLowerCase();
-
-const knownAliasExecutables = (normalizedToken: string, systemRoot: string): string[] => {
-  const screenSketch = path.join(systemRoot, 'SystemApps', 'Microsoft.ScreenSketch_8wekyb3d8bbwe', 'ScreenSketch.exe');
-
-  if (normalizedToken === 'task manager' || normalizedToken === 'taskmgr' || normalizedToken === 'taskmgr.exe') {
-    return ['Taskmgr.exe'];
+const toCandidateCacheKey = (candidate: IconCandidate): string => `${candidate.kind}:${candidate.path}`;
+const pathExists = async (targetPath: string): Promise<boolean> => {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
   }
-
-  if (
-    normalizedToken === 'snipping tool' ||
-    normalizedToken === 'snippingtool' ||
-    normalizedToken === 'snippingtool.exe' ||
-    normalizedToken === 'screen sketch' ||
-    normalizedToken === 'screensketch' ||
-    normalizedToken === 'screensketch.exe'
-  ) {
-    return ['SnippingTool.exe', 'ScreenSketch.exe', screenSketch];
-  }
-
-  return [];
-};
-
-const tokenToCandidatePaths = (token: string, systemRoot: string): string[] => {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  if (path.isAbsolute(trimmed)) {
-    return [trimmed];
-  }
-
-  const hasSeparators = trimmed.includes('\\') || trimmed.includes('/');
-  const base = path.basename(trimmed);
-  const hasExtension = /\.[a-z0-9]+$/i.test(base);
-
-  const localTokens = new Set<string>();
-  localTokens.add(trimmed);
-
-  if (!hasExtension && !hasSeparators) {
-    localTokens.add(`${trimmed}.exe`);
-  }
-
-  if (base && base !== trimmed) {
-    localTokens.add(base);
-    if (!/\.[a-z0-9]+$/i.test(base)) {
-      localTokens.add(`${base}.exe`);
-    }
-  }
-
-  const candidates = new Set<string>();
-
-  for (const localToken of localTokens) {
-    if (path.isAbsolute(localToken)) {
-      continue;
-    }
-
-    if (localToken.includes('\\') || localToken.includes('/')) {
-      continue;
-    }
-
-    candidates.add(path.join(systemRoot, 'System32', localToken));
-    candidates.add(path.join(systemRoot, 'SysWOW64', localToken));
-    candidates.add(path.join(systemRoot, localToken));
-  }
-
-  return Array.from(candidates);
-};
-
-const buildIconCandidates = (appName: string, exePath: string | null): string[] => {
-  const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
-
-  const tokens = new Set<string>();
-  const addToken = (value: string | null | undefined): void => {
-    if (!value) {
-      return;
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    tokens.add(trimmed);
-    tokens.add(path.basename(trimmed));
-  };
-
-  addToken(exePath);
-  addToken(appName);
-
-  const compactName = normalize(appName).replace(/\s+/g, '');
-  if (compactName) {
-    tokens.add(compactName);
-  }
-
-  const candidates: string[] = [];
-  const seen = new Set<string>();
-  const addCandidate = (candidate: string): void => {
-    if (!candidate || seen.has(candidate)) {
-      return;
-    }
-
-    seen.add(candidate);
-    candidates.push(candidate);
-  };
-
-  for (const token of tokens) {
-    for (const candidate of tokenToCandidatePaths(token, systemRoot)) {
-      addCandidate(candidate);
-    }
-
-    for (const alias of knownAliasExecutables(normalize(token), systemRoot)) {
-      for (const candidate of tokenToCandidatePaths(alias, systemRoot)) {
-        addCandidate(candidate);
-      }
-    }
-  }
-
-  return candidates;
 };
 
 const mapProcessesForRenderer = (processes: Map<string, { name: string; running: boolean }>): AIToolProcess[] =>
@@ -280,23 +209,66 @@ export const registerIpcHandlers = (
     return mapProcessesForRenderer(processes);
   });
 
+  const getTrustedIconRequest = async (
+    appName: string,
+    exePath: string | null
+  ): Promise<{ trusted: boolean; trustedExePath: string | null }> => {
+    if (!appName.trim()) {
+      return { trusted: false, trustedExePath: null };
+    }
+
+    if (exePath && path.isAbsolute(exePath)) {
+      const trusted = await database.hasTrustedAppRecord(appName, exePath);
+      return { trusted, trustedExePath: trusted ? exePath : null };
+    }
+
+    const trusted = await database.hasTrustedAppRecord(appName, null);
+    return { trusted, trustedExePath: null };
+  };
+
+  ipcMain.handle(
+    IPC_CHANNELS.iconsGetAppInstallState,
+    async (_event, params: { appName: string; exePath: string | null }) => {
+      const appName = typeof params?.appName === 'string' ? params.appName : '';
+      const exePath = typeof params?.exePath === 'string' ? params.exePath : null;
+
+      if (!exePath || !path.isAbsolute(exePath)) {
+        return false;
+      }
+
+      const trustedRequest = await getTrustedIconRequest(appName, exePath);
+      if (!trustedRequest.trusted || !trustedRequest.trustedExePath) {
+        return false;
+      }
+
+      return pathExists(trustedRequest.trustedExePath);
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.iconsGetAppIcon,
     async (_event, params: { appName: string; exePath: string | null }) => {
       const appName = typeof params?.appName === 'string' ? params.appName : '';
       const exePath = typeof params?.exePath === 'string' ? params.exePath : null;
 
-      const requestKey = `${normalize(appName)}|${normalize(exePath ?? '')}`;
+      const trustedRequest = await getTrustedIconRequest(appName, exePath);
+      if (!trustedRequest.trusted) {
+        return null;
+      }
+
+      const trustedExePath = trustedRequest.trustedExePath;
+      const requestKey = `${normalize(appName)}|${normalize(trustedExePath ?? '')}`;
       if (iconByRequestKey.has(requestKey)) {
         return iconByRequestKey.get(requestKey) ?? null;
       }
 
-      const candidates = buildIconCandidates(appName, exePath);
+      const candidates = await buildIconCandidates(appName, trustedExePath);
       const iconSizes: Array<'large' | 'normal' | 'small'> = ['large', 'normal', 'small'];
 
       for (const candidate of candidates) {
-        if (iconByCandidatePath.has(candidate)) {
-          const cached = iconByCandidatePath.get(candidate) ?? null;
+        const candidateKey = toCandidateCacheKey(candidate);
+        if (iconByCandidateKey.has(candidateKey)) {
+          const cached = iconByCandidateKey.get(candidateKey) ?? null;
           if (cached) {
             iconByRequestKey.set(requestKey, cached);
             return cached;
@@ -304,39 +276,44 @@ export const registerIpcHandlers = (
           continue;
         }
 
-        const looksLikePath = path.isAbsolute(candidate) || candidate.includes('\\') || candidate.includes('/');
-        if (looksLikePath && !existsSync(candidate)) {
-          iconByCandidatePath.set(candidate, null);
+        const looksLikePath = candidate.path.includes('\\') || candidate.path.includes('/');
+        if (looksLikePath && !(await pathExists(candidate.path))) {
+          iconByCandidateKey.set(candidateKey, null);
           continue;
         }
 
         try {
           let resolvedIcon: string | null = null;
 
-          for (const size of iconSizes) {
-            const icon = await app.getFileIcon(candidate, { size });
-            if (icon.isEmpty()) {
-              continue;
-            }
+          if (candidate.kind === 'image-file') {
+            const icon = nativeImage.createFromPath(candidate.path);
+            resolvedIcon = icon.isEmpty() ? null : icon.toDataURL();
+          } else {
+            for (const size of iconSizes) {
+              const icon = await app.getFileIcon(candidate.path, { size });
+              if (icon.isEmpty()) {
+                continue;
+              }
 
-            const dataUrl = icon.toDataURL();
-            const genericExeIcon = await getGenericExeIcon(size);
-            if (genericExeIcon && dataUrl === genericExeIcon) {
-              continue;
-            }
+              const dataUrl = icon.toDataURL();
+              const genericExeIcon = await getGenericExeIcon(size);
+              if (genericExeIcon && dataUrl === genericExeIcon) {
+                continue;
+              }
 
-            resolvedIcon = dataUrl;
-            break;
+              resolvedIcon = dataUrl;
+              break;
+            }
           }
 
-          iconByCandidatePath.set(candidate, resolvedIcon);
+          iconByCandidateKey.set(candidateKey, resolvedIcon);
 
           if (resolvedIcon) {
             iconByRequestKey.set(requestKey, resolvedIcon);
             return resolvedIcon;
           }
         } catch {
-          iconByCandidatePath.set(candidate, null);
+          iconByCandidateKey.set(candidateKey, null);
         }
       }
 
@@ -420,3 +397,4 @@ export const registerIpcHandlers = (
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 };
+

@@ -2,15 +2,13 @@ import * as React from 'react';
 import type { TopAppStat } from '../../../shared/types';
 import { formatDuration } from '../lib/utils';
 import { detectAITool, getAITools } from '../lib/ai-tools';
-import claudeLogoUrl from '../assets/claude-icon-logo.svg';
-import openaiLogoUrl from '../assets/openai-icon-logo.svg';
+import { getAppIconCacheKey } from '../lib/app-icon';
+import { AppIcon } from './AppIcon';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 type TopAppsTableProps = {
   apps: TopAppStat[];
 };
-
-const rowIconKey = (appName: string, exePath: string | null): string => `${appName}::${exePath ?? ''}`;
 
 export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => {
   const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
@@ -44,7 +42,7 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
               appName: row.appName,
               exePath: row.exePath
             });
-            return iconDataUrl ? ([rowIconKey(row.appName, row.exePath), iconDataUrl] as const) : null;
+            return iconDataUrl ? ([getAppIconCacheKey(row.appName, row.exePath), iconDataUrl] as const) : null;
           } catch {
             return null;
           }
@@ -72,31 +70,6 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
     };
   }, [apps]);
 
-  const getAppIcon = (
-    appName: string,
-    exePath: string | null,
-    aiTool: ReturnType<typeof detectAITool>
-  ): React.JSX.Element => {
-    if (aiTool === 'claude') {
-      return <img src={claudeLogoUrl} alt="Claude icon" className="h-5 w-5 shrink-0" />;
-    }
-    if (aiTool === 'codex') {
-      return <img src={openaiLogoUrl} alt="Codex icon" className="h-5 w-5 shrink-0 dark:invert" />;
-    }
-
-    const nativeIcon = nativeIconsByRowKey[rowIconKey(appName, exePath)];
-    if (nativeIcon) {
-      return <img src={nativeIcon} alt={`${appName} icon`} className="h-5 w-5 shrink-0 rounded" />;
-    }
-
-    const initial = appName.trim().charAt(0).toUpperCase() || '?';
-    return (
-      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--border))] text-[11px] font-semibold text-[hsl(var(--muted))]">
-        {initial}
-      </span>
-    );
-  };
-
   return (
     <Table>
       <TableHeader>
@@ -110,10 +83,13 @@ export const TopAppsTable = ({ apps }: TopAppsTableProps): React.JSX.Element => 
         {apps.map((row) => {
           const aiTool = detectAITool(row.appName, row.exePath);
           const toolConfig = aiTool ? aiTools[aiTool] : null;
+          const nativeIconSrc = nativeIconsByRowKey[getAppIconCacheKey(row.appName, row.exePath)] ?? null;
 
           return (
             <TableRow key={`${row.appName}-${row.exePath ?? 'none'}`}>
-              <TableCell>{getAppIcon(row.appName, row.exePath, aiTool)}</TableCell>
+              <TableCell>
+                <AppIcon appName={row.appName} exePath={row.exePath} nativeIconSrc={nativeIconSrc} size="lg" />
+              </TableCell>
               <TableCell className="font-medium">
                 <span className="flex items-center gap-2">
                   {toolConfig && (

@@ -24,6 +24,25 @@ describe('ActivityTrackerCore', () => {
     expect(sessions[1]).toMatchObject({ appName: 'Chrome.exe', durationSec: 20, isIdleSegment: false, source: 'shutdown' });
   });
 
+  it('stops tracking when there is no active app instead of persisting Unknown', async () => {
+    const sessions: SessionInput[] = [];
+    const tracker = new ActivityTrackerCore(300, async (session) => {
+      sessions.push(session);
+    });
+
+    tracker.start();
+
+    await tracker.tick(new Date('2026-03-10T09:00:00.000Z'), appA, 0);
+    await tracker.tick(new Date('2026-03-10T09:00:10.000Z'), null, 0);
+
+    expect(tracker.getStatus()).toMatchObject({ currentApp: null });
+
+    await tracker.stop(new Date('2026-03-10T09:00:20.000Z'));
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ appName: 'Code.exe', durationSec: 10, isIdleSegment: false, source: 'focus-change' });
+  });
+
   it('starts idle segment when threshold is reached', async () => {
     const sessions: SessionInput[] = [];
     const tracker = new ActivityTrackerCore(300, async (session) => {
@@ -62,3 +81,4 @@ describe('ActivityTrackerCore', () => {
     expect(sessions[1]).toMatchObject({ durationSec: 20, source: 'shutdown' });
   });
 });
+

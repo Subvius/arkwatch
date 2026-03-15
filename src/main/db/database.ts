@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { Database, open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import type { AIToolDailyStat, AppLimit, AppLimitStatus, AppSettings, DateRange, FocusSchedule, FocusSessionRecord, SessionInput, SummaryStats, TopAppStat } from '../../shared/types';
+import { buildIgnoredAppsSql } from '../lib/app-tracking-policy';
 
 const DEFAULT_SETTINGS: AppSettings = {
   idleThresholdSeconds: 300,
@@ -22,6 +23,8 @@ const AI_TOOLS: Array<{ id: AIToolId; keyword: string }> = [
   { id: 'claude', keyword: 'claude' },
   { id: 'codex', keyword: 'codex' }
 ];
+
+const VISIBLE_SESSIONS_SQL = buildIgnoredAppsSql();
 
 const resolveAIToolId = (appName: string, exePath: string | null): AIToolId | null => {
   const normalizedName = appName.toLowerCase();
@@ -281,6 +284,7 @@ export class ArkWatchDatabase {
       FROM sessions
       WHERE started_at >= ? AND started_at <= ?
         AND source != 'background-process'
+        AND ${VISIBLE_SESSIONS_SQL}
       `,
       range.from,
       range.to
@@ -299,6 +303,7 @@ export class ArkWatchDatabase {
       FROM sessions
       WHERE started_at >= ? AND started_at <= ?
         AND source != 'background-process'
+        AND ${VISIBLE_SESSIONS_SQL}
       GROUP BY DATE(started_at, 'localtime')
       ORDER BY date ASC
       `,
@@ -324,12 +329,13 @@ export class ArkWatchDatabase {
     }[]>(
       `
       WITH filtered_sessions AS (
-        SELECT app_name, exe_path, duration_sec
+        SELECT app_name, exe_path, duration_sec, started_at
         FROM sessions
         WHERE started_at >= ?
           AND started_at <= ?
           AND is_idle_segment = 0
           AND source != 'background-process'
+          AND ${VISIBLE_SESSIONS_SQL}
       ),
       durations AS (
         SELECT app_name AS appName, COALESCE(SUM(duration_sec), 0) AS activeSeconds
@@ -338,19 +344,27 @@ export class ArkWatchDatabase {
       ),
       preferred_paths AS (
         SELECT
-          app_name AS appName,
-          exe_path AS exePath,
+          ranked_paths.appName,
+          ranked_paths.exePath,
           ROW_NUMBER() OVER (
-            PARTITION BY app_name
+            PARTITION BY ranked_paths.appName
             ORDER BY
               CASE
-                WHEN exe_path IS NULL OR TRIM(exe_path) = '' THEN 2
-                WHEN INSTR(exe_path, '\\') > 0 OR INSTR(exe_path, '/') > 0 THEN 0
+                WHEN ranked_paths.exePath IS NULL OR TRIM(ranked_paths.exePath) = '' THEN 2
+                WHEN INSTR(ranked_paths.exePath, '\\') > 0 OR INSTR(ranked_paths.exePath, '/') > 0 THEN 0
                 ELSE 1
               END ASC,
-              LENGTH(COALESCE(exe_path, '')) DESC
+              ranked_paths.lastSeenAt DESC,
+              LENGTH(COALESCE(ranked_paths.exePath, '')) DESC
           ) AS pathRank
-        FROM filtered_sessions
+        FROM (
+          SELECT
+            app_name AS appName,
+            exe_path AS exePath,
+            MAX(started_at) AS lastSeenAt
+          FROM filtered_sessions
+          GROUP BY app_name, exe_path
+        ) ranked_paths
       )
       SELECT
         d.appName,
@@ -370,7 +384,6 @@ export class ArkWatchDatabase {
 
     return rows;
   }
-
   async getAIToolDailyStats(range: DateRange): Promise<AIToolDailyStat[]> {
     const db = this.requireDb();
 
@@ -480,10 +493,58 @@ export class ArkWatchDatabase {
     const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
     const row = await db.get<{ total: number }>(
       `SELECT COALESCE(SUM(duration_sec), 0) AS total FROM sessions
-       WHERE app_name = ? AND started_at >= ? AND started_at <= ? AND is_idle_segment = 0 AND source != 'background-process'`,
+       WHERE app_name = ? AND started_at >= ? AND started_at <= ? AND is_idle_segment = 0 AND source != 'background-process' AND ${VISIBLE_SESSIONS_SQL}`,
       appName, from, to
     );
     return row?.total ?? 0;
+  }
+
+  async hasTrustedAppRecord(appName: string, exePath: string | null): Promise<boolean> {
+    const db = this.requireDb();
+    const normalizedAppName = appName.trim().toLowerCase();
+    const normalizedExePath = exePath?.trim() ? exePath.trim().toLowerCase() : null;
+
+    if (!normalizedAppName) {
+      return false;
+    }
+
+    const row = normalizedExePath
+      ? await db.get<{ found: number }>(
+          `
+          SELECT 1 AS found
+          FROM app_limits
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND LOWER(TRIM(COALESCE(exe_path, ''))) = ?
+          UNION
+          SELECT 1 AS found
+          FROM sessions
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND LOWER(TRIM(COALESCE(exe_path, ''))) = ?
+            AND ${VISIBLE_SESSIONS_SQL}
+          LIMIT 1
+          `,
+          normalizedAppName,
+          normalizedExePath,
+          normalizedAppName,
+          normalizedExePath
+        )
+      : await db.get<{ found: number }>(
+          `
+          SELECT 1 AS found
+          FROM app_limits
+          WHERE LOWER(TRIM(app_name)) = ?
+          UNION
+          SELECT 1 AS found
+          FROM sessions
+          WHERE LOWER(TRIM(app_name)) = ?
+            AND ${VISIBLE_SESSIONS_SQL}
+          LIMIT 1
+          `,
+          normalizedAppName,
+          normalizedAppName
+        );
+
+    return Boolean(row?.found);
   }
 
   // --- Focus Sessions ---
@@ -647,4 +708,5 @@ export class ArkWatchDatabase {
     return this.db;
   }
 }
+
 
