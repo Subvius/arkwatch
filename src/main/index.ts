@@ -13,6 +13,7 @@ import { FocusService } from './focus/focus-service';
 import { BreakReminderService } from './focus/break-reminder-service';
 import { AppLimitChecker } from './focus/app-limit-checker';
 import { ScheduleChecker } from './focus/schedule-checker';
+import { registerEffectIpcHandlers, unregisterEffectIpcHandlers } from './effect/register-effect-ipc';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -90,9 +91,9 @@ const createWindow = (): BrowserWindow => {
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void window.loadFile(path.join(__dirname, '../renderer/index.html'));
+    const rendererPath = path.join(__dirname, '../renderer/index.html');
+    void window.loadFile(rendererPath);
   }
-
   return window;
 };
 
@@ -234,6 +235,8 @@ const shutdown = async (): Promise<void> => {
     tracker = null;
   }
 
+  await unregisterEffectIpcHandlers();
+
   if (database) {
     await database.close();
     database = null;
@@ -259,7 +262,8 @@ const bootstrap = async (): Promise<void> => {
   const userDataPath = path.join(app.getPath('appData'), 'ArkWatch');
   await fs.mkdir(userDataPath, { recursive: true });
 
-  database = new ArkWatchDatabase(path.join(userDataPath, 'arkwatch.db'));
+  const databasePath = path.join(userDataPath, 'arkwatch.db');
+  database = new ArkWatchDatabase(databasePath);
   await database.init();
 
   const settings = await database.getSettings();
@@ -295,6 +299,7 @@ const bootstrap = async (): Promise<void> => {
   }, () => {
     refreshTrayMenu?.();
   }, getMainWindow, focusService, appLimitChecker);
+  registerEffectIpcHandlers(database, getMainWindow);
 
   mainWindow = createWindow();
 
@@ -380,6 +385,12 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
+
+
+
+
+
 
 
 
