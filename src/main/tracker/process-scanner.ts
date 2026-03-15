@@ -162,6 +162,11 @@ export class BackgroundProcessTracker {
       this.intervalId = null;
     }
 
+    const inFlightPoll = this.pollInFlight;
+    if (inFlightPoll) {
+      await inFlightPoll;
+    }
+
     // Flush all active sessions
     const now = new Date();
     for (const [id, session] of this.activeSessions) {
@@ -244,6 +249,7 @@ export class BackgroundProcessTracker {
     });
   }
 }
+
 
 
 
