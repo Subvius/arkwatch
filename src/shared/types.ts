@@ -138,6 +138,7 @@ export type ArkWatchApi = {
   };
   processes: {
     getAITools: () => Promise<AIToolProcess[]>;
+    pollNow: () => Promise<AIToolProcess[]>;
     onChanged: (callback: (processes: AIToolProcess[]) => void) => () => void;
   };
   icons: {

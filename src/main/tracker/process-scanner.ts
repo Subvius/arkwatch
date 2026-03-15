@@ -92,9 +92,7 @@ const notifyListener = (
   }
 };
 
-export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
-  const results = mapProcessNamesToAITools([]);
-
+export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess> | null> => {
   try {
     const { stdout } = await execAsync('tasklist /FO CSV /NH', {
       windowsHide: true,
@@ -102,11 +100,10 @@ export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundP
     });
 
     return mapProcessNamesToAITools(parseTasklistCsvOutput(stdout));
-  } catch {
-    // Silently fail - process scanning is best-effort
+  } catch (error) {
+    console.error('[process-scanner] background scan failed', error);
+    return null;
   }
-
-  return results;
 };
 
 type ActiveSession = {
@@ -153,6 +150,11 @@ export class BackgroundProcessTracker {
     void this.poll();
   }
 
+  async pollNow(): Promise<ReadonlyArray<AIToolProcess>> {
+    await this.poll();
+    return this.lastSnapshot;
+  }
+
   async stop(): Promise<void> {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -182,6 +184,10 @@ export class BackgroundProcessTracker {
 
   private async poll(): Promise<void> {
     const processes = await scanBackgroundProcesses();
+    if (processes === null) {
+      return;
+    }
+
     const now = new Date();
 
     this.publishSnapshot(processes);

@@ -37,6 +37,7 @@ const api: ArkWatchApi = {
   },
   processes: {
     getAITools: () => ipcRenderer.invoke(IPC_CHANNELS.processesGetAITools),
+    pollNow: () => ipcRenderer.invoke(IPC_CHANNELS.processesPollNow),
     onChanged: (callback: (processes: AIToolProcess[]) => void) => {
       const handler = (_event: unknown, processes: AIToolProcess[]) => callback(processes);
       ipcRenderer.on(IPC_CHANNELS.processesChanged, handler);

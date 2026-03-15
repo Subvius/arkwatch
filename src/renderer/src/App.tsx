@@ -245,6 +245,9 @@ export const App = (): React.JSX.Element => {
   const loadProcesses = React.useCallback(async () => {
     const requestId = processPullRequestRef.current + 1;
     processPullRequestRef.current = requestId;
+
+    await window.arkwatch.processes.pollNow();
+
     const pushVersionAtRequest = processStateVersionRef.current;
     const processes = await window.arkwatch.processes.getAITools();
 
@@ -279,7 +282,7 @@ export const App = (): React.JSX.Element => {
     setFocusTodayCount(count);
   }, []);
 
-  const refreshLiveState = React.useCallback(async (markLoaded = false): Promise<void> => {
+  const refreshLiveState = React.useCallback(async (markLoaded = false): Promise<boolean> => {
     const results = await Promise.allSettled([
       loadStatus(),
       loadData(),
@@ -288,16 +291,29 @@ export const App = (): React.JSX.Element => {
       loadFocusData()
     ]);
 
+    let allFulfilled = true;
+
     for (const result of results) {
       if (result.status === 'rejected') {
+        allFulfilled = false;
         console.error('[runtime] live refresh failed', result.reason);
       }
     }
 
-    if (markLoaded) {
+    if (!allFulfilled) {
+      if (markLoaded || !dataLoaded) {
+        console.error('[bootstrap] critical startup refresh incomplete; keeping skeleton visible');
+      }
+
+      return false;
+    }
+
+    if (!dataLoaded) {
       setDataLoaded(true);
     }
-  }, [loadAIStats, loadData, loadFocusData, loadProcesses, loadStatus]);
+
+    return true;
+  }, [dataLoaded, loadAIStats, loadData, loadFocusData, loadProcesses, loadStatus]);
 
   const loadAppLimits = React.useCallback(async () => {
     const limits = await window.arkwatch.appLimits.getAll();
@@ -971,6 +987,7 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+
 
 
 

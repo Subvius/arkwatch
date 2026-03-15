@@ -85,11 +85,11 @@ const tokenToCandidatePaths = (token: string, systemRoot: string): string[] => {
 
   for (const localToken of localTokens) {
     if (path.isAbsolute(localToken)) {
-        continue;
+      continue;
     }
 
     if (localToken.includes('\\') || localToken.includes('/')) {
-        continue;
+      continue;
     }
 
     candidates.add(path.join(systemRoot, 'System32', localToken));
@@ -151,6 +151,13 @@ const buildIconCandidates = (appName: string, exePath: string | null): string[] 
 
   return candidates;
 };
+
+const mapProcessesForRenderer = (processes: Map<string, { name: string; running: boolean }>): AIToolProcess[] =>
+  Array.from(processes.entries()).map(([id, info]) => ({
+    id,
+    name: info.name,
+    running: info.running
+  }));
 
 export const registerIpcHandlers = (
   database: ArkWatchDatabase,
@@ -253,11 +260,24 @@ export const registerIpcHandlers = (
     }
 
     const processes = await scanBackgroundProcesses();
-    return Array.from(processes.entries()).map(([id, info]) => ({
-      id,
-      name: info.name,
-      running: info.running
-    }));
+    if (processes === null) {
+      throw new Error('AI process scan failed');
+    }
+
+    return mapProcessesForRenderer(processes);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.processesPollNow, async () => {
+    if (bgTracker) {
+      return bgTracker.pollNow();
+    }
+
+    const processes = await scanBackgroundProcesses();
+    if (processes === null) {
+      throw new Error('AI process scan failed');
+    }
+
+    return mapProcessesForRenderer(processes);
   });
 
   ipcMain.handle(
@@ -400,5 +420,3 @@ export const registerIpcHandlers = (
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 };
-
-
