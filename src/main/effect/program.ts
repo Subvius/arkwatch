@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { app } from 'electron';
 import { NodeRuntime } from '@effect/platform-node';
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, ManagedRuntime, Stream } from 'effect';
 import { electronLifecycleStream } from './lifecycle';
 import { BrowserWindowController, makeBrowserWindowLayer } from './services';
 
@@ -16,6 +16,24 @@ const windowLayer = makeBrowserWindowLayer({
     sandbox: true
   }
 });
+
+const windowRuntime = ManagedRuntime.make(windowLayer);
+let windowRuntimeDisposed = false;
+
+const disposeWindowRuntime = Effect.suspend(() => {
+  if (windowRuntimeDisposed) {
+    return Effect.void;
+  }
+
+  windowRuntimeDisposed = true;
+  return Effect.promise(() => windowRuntime.dispose());
+});
+
+const runWithWindowRuntime = <A, E>(effect: Effect.Effect<A, E, BrowserWindowController>) =>
+  Effect.tryPromise({
+    try: () => windowRuntime.runPromise(effect),
+    catch: (cause) => cause
+  });
 
 const openPrimaryWindow = Effect.gen(function*() {
   const browserWindow = yield* BrowserWindowController;
@@ -37,7 +55,7 @@ export const effectMainProgram = Stream.runForEach(
   (event) => {
     switch (event._tag) {
       case 'Ready':
-        return openPrimaryWindow.pipe(Effect.provide(windowLayer));
+        return runWithWindowRuntime(openPrimaryWindow);
       case 'WindowAllClosed':
         return Effect.sync(() => {
           if (process.platform !== 'darwin') {
@@ -47,12 +65,18 @@ export const effectMainProgram = Stream.runForEach(
       case 'Activate':
         return Effect.void;
       case 'BeforeQuit':
-        return Effect.logDebug('Electron before-quit received');
+        return Effect.zipRight(
+          Effect.logDebug('Electron before-quit received'),
+          disposeWindowRuntime
+        );
     }
   }
-).pipe(Effect.scoped, Effect.provide(Layer.empty));
+);
 
 export const runEffectMain = (): void => {
-  NodeRuntime.runMain(effectMainProgram);
+  NodeRuntime.runMain(
+    effectMainProgram.pipe(
+      Effect.ensuring(disposeWindowRuntime)
+    )
+  );
 };
-

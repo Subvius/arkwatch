@@ -14,7 +14,13 @@ import {
   serializeParseError,
   systemDialogContracts
 } from '../../shared/effect';
-import { ElectronDialogLive, ElectronDialogService, makeMainWindowRefLayer, makePreferencesRepositoryLayer, PreferencesRepository } from './services';
+import {
+  ElectronDialogLive,
+  ElectronDialogService,
+  makeMainWindowRefLayer,
+  makePreferencesRepositoryLayer,
+  PreferencesRepository
+} from './services';
 
 const encodeResponse = <TContract extends AnyIpcContract>(
   contract: TContract,
@@ -67,6 +73,9 @@ const registerContract = <TRuntime, TContract extends AnyIpcContract>(
   });
 };
 
+let ipcRuntime: ManagedRuntime.ManagedRuntime<PreferencesRepository | ElectronDialogService, never> | null = null;
+const appCleanupContracts = new Set<string>();
+
 export const registerEffectIpcHandlers = (
   database: ArkWatchDatabase,
   getMainWindow: () => BrowserWindow | null
@@ -74,6 +83,7 @@ export const registerEffectIpcHandlers = (
   const dialogLayer = Layer.provide(ElectronDialogLive, makeMainWindowRefLayer(getMainWindow));
   const liveLayer = Layer.mergeAll(makePreferencesRepositoryLayer(database), dialogLayer);
   const runtime = ManagedRuntime.make(liveLayer);
+  ipcRuntime = runtime;
 
   registerContract(runtime, preferencesContracts.get, () =>
     Effect.gen(function*() {
@@ -101,11 +111,15 @@ export const registerEffectIpcHandlers = (
   }
 };
 
-const appCleanupContracts = new Set<string>();
-
-export const unregisterEffectIpcHandlers = (): void => {
+export const unregisterEffectIpcHandlers = async (): Promise<void> => {
   for (const channel of appCleanupContracts) {
     ipcMain.removeHandler(channel);
   }
   appCleanupContracts.clear();
+
+  if (ipcRuntime) {
+    const runtime = ipcRuntime;
+    ipcRuntime = null;
+    await runtime.dispose();
+  }
 };

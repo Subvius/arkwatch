@@ -235,7 +235,7 @@ const shutdown = async (): Promise<void> => {
     tracker = null;
   }
 
-  unregisterEffectIpcHandlers();
+  await unregisterEffectIpcHandlers();
 
   if (database) {
     await database.close();
@@ -385,6 +385,7 @@ if (!app.requestSingleInstanceLock()) {
     // Keep app alive in tray on Windows.
   });
 }
+
 
 
 

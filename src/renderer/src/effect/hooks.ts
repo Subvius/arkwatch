@@ -6,7 +6,8 @@ import { rendererRuntime } from './runtime';
 type QueryState<A, E> =
   | { readonly status: 'idle' | 'loading'; readonly data: null; readonly error: null }
   | { readonly status: 'success'; readonly data: A; readonly error: null }
-  | { readonly status: 'error'; readonly data: null; readonly error: E };
+  | { readonly status: 'error'; readonly data: null; readonly error: E }
+  | { readonly status: 'defect'; readonly data: null; readonly error: null; readonly defect: string };
 
 export const useEffectQuery = <A, E>(
   effectFactory: () => Effect.Effect<A, E, RendererIpcClient>,
@@ -38,7 +39,9 @@ export const useEffectQuery = <A, E>(
         return;
       }
 
-      console.error('[effect-query] untyped defect', Cause.pretty(exit.cause));
+      const defect = Cause.pretty(exit.cause);
+      console.error('[effect-query] untyped defect', defect);
+      setState({ status: 'defect', data: null, error: null, defect });
     });
 
     return () => {

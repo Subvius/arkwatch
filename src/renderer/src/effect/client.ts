@@ -16,7 +16,15 @@ export class EffectBridgePort extends Context.Tag('arkwatch/renderer/effect/Effe
 >() {}
 
 export const EffectBridgePortLive = Layer.succeed(EffectBridgePort, {
-  invoke: window.effectBridge.invoke
+  invoke: (channel, payload) => {
+    const bridge = globalThis.window?.effectBridge;
+
+    if (!bridge || typeof bridge.invoke !== 'function') {
+      return Promise.reject(new Error('Effect preload bridge is unavailable.'));
+    }
+
+    return bridge.invoke(channel, payload);
+  }
 });
 
 export class RendererIpcClient extends Context.Tag('arkwatch/renderer/effect/RendererIpcClient')<
@@ -48,7 +56,9 @@ export const RendererIpcClientLive: Layer.Layer<RendererIpcClient, never, Effect
         Effect.gen(function*() {
           const payload = yield* Schema.encodeUnknown(
             contract.request as Schema.Schema<ContractRequest<TContract>, unknown, never>
-          )(request).pipe(Effect.orDie);
+          )(request).pipe(
+            Effect.mapError((error) => serializeParseError('request', error))
+          );
           const rawResponse = yield* Effect.tryPromise({
             try: () => bridge.invoke(contract.channel as Parameters<typeof bridge.invoke>[0], payload),
             catch: (cause) =>

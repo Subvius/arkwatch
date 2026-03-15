@@ -1,6 +1,12 @@
 import { ipcRenderer } from 'electron';
-import type { EffectBridgeApi } from '../shared/effect';
+import { isEffectChannel, type EffectBridgeApi } from '../shared/effect';
 
 export const effectBridgeApi: EffectBridgeApi = {
-  invoke: (channel, payload) => ipcRenderer.invoke(channel, payload)
+  invoke: (channel, payload) => {
+    if (typeof channel !== 'string' || !isEffectChannel(channel)) {
+      return Promise.reject(new Error(`Invalid effect IPC channel: ${String(channel)}`));
+    }
+
+    return ipcRenderer.invoke(channel, payload);
+  }
 };
