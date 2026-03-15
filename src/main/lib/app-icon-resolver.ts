@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 export type IconCandidate =
@@ -14,6 +14,15 @@ export type IconCandidate =
 const APPX_MANIFEST_FILE = 'AppxManifest.xml';
 
 const normalize = (value: string): string => value.trim().toLowerCase();
+
+const pathExists = async (targetPath: string): Promise<boolean> => {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const knownAliasExecutables = (normalizedToken: string, systemRoot: string): string[] => {
   const screenSketch = path.join(systemRoot, 'SystemApps', 'Microsoft.ScreenSketch_8wekyb3d8bbwe', 'ScreenSketch.exe');
@@ -127,7 +136,7 @@ const buildAdjacentImageCandidates = (exePath: string): IconCandidate[] => {
   return candidates;
 };
 
-const findAppxPackageRoot = (exePath: string): string | null => {
+const findAppxPackageRoot = async (exePath: string): Promise<string | null> => {
   if (!path.isAbsolute(exePath)) {
     return null;
   }
@@ -135,7 +144,7 @@ const findAppxPackageRoot = (exePath: string): string | null => {
   let currentDirectory = path.dirname(exePath);
   for (let depth = 0; depth < 4; depth += 1) {
     const manifestPath = path.join(currentDirectory, APPX_MANIFEST_FILE);
-    if (existsSync(manifestPath)) {
+    if (await pathExists(manifestPath)) {
       return currentDirectory;
     }
 
@@ -213,7 +222,7 @@ const getPackageAssetPriority = (fileName: string, requestedBaseName: string): n
   return score;
 };
 
-const buildManifestImageCandidates = (packageRoot: string, relativePath: string): IconCandidate[] => {
+const buildManifestImageCandidates = async (packageRoot: string, relativePath: string): Promise<IconCandidate[]> => {
   const normalizedRelativePath = relativePath.replace(/[\\/]+/g, path.sep);
   const resolvedAssetPath = path.join(packageRoot, normalizedRelativePath);
   const assetDirectory = path.dirname(resolvedAssetPath);
@@ -234,11 +243,11 @@ const buildManifestImageCandidates = (packageRoot: string, relativePath: string)
 
   addCandidate(resolvedAssetPath);
 
-  if (!existsSync(assetDirectory)) {
+  if (!(await pathExists(assetDirectory))) {
     return candidates;
   }
 
-  const matchingFiles = readdirSync(assetDirectory, { withFileTypes: true })
+  const matchingFiles = (await readdir(assetDirectory, { withFileTypes: true }))
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
     .filter((fileName) => {
@@ -265,23 +274,24 @@ const buildManifestImageCandidates = (packageRoot: string, relativePath: string)
   return candidates;
 };
 
-const buildAppxManifestCandidates = (exePath: string): IconCandidate[] => {
-  const packageRoot = findAppxPackageRoot(exePath);
+const buildAppxManifestCandidates = async (exePath: string): Promise<IconCandidate[]> => {
+  const packageRoot = await findAppxPackageRoot(exePath);
   if (!packageRoot) {
     return [];
   }
 
   try {
-    const manifest = readFileSync(path.join(packageRoot, APPX_MANIFEST_FILE), 'utf8');
+    const manifest = await readFile(path.join(packageRoot, APPX_MANIFEST_FILE), 'utf8');
     const logoPaths = extractManifestLogoPaths(manifest);
+    const candidateGroups = await Promise.all(logoPaths.map((logoPath) => buildManifestImageCandidates(packageRoot, logoPath)));
 
-    return logoPaths.flatMap((logoPath) => buildManifestImageCandidates(packageRoot, logoPath));
+    return candidateGroups.flat();
   } catch {
     return [];
   }
 };
 
-export const buildIconCandidates = (appName: string, exePath: string | null): IconCandidate[] => {
+export const buildIconCandidates = async (appName: string, exePath: string | null): Promise<IconCandidate[]> => {
   const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
 
   const tokens = new Set<string>();
@@ -309,6 +319,7 @@ export const buildIconCandidates = (appName: string, exePath: string | null): Ic
 
   const candidates: IconCandidate[] = [];
   const seen = new Set<string>();
+  const manifestCandidatesByPath = new Map<string, IconCandidate[]>();
   const addCandidate = (candidate: IconCandidate): void => {
     const key = `${candidate.kind}:${candidate.path}`;
     if (!candidate.path || seen.has(key)) {
@@ -317,6 +328,15 @@ export const buildIconCandidates = (appName: string, exePath: string | null): Ic
 
     seen.add(key);
     candidates.push(candidate);
+  };
+  const getManifestCandidates = async (candidatePath: string): Promise<IconCandidate[]> => {
+    if (manifestCandidatesByPath.has(candidatePath)) {
+      return manifestCandidatesByPath.get(candidatePath) ?? [];
+    }
+
+    const manifestCandidates = await buildAppxManifestCandidates(candidatePath);
+    manifestCandidatesByPath.set(candidatePath, manifestCandidates);
+    return manifestCandidates;
   };
 
   for (const token of tokens) {
@@ -328,7 +348,7 @@ export const buildIconCandidates = (appName: string, exePath: string | null): Ic
           addCandidate(adjacentCandidate);
         }
 
-        for (const manifestCandidate of buildAppxManifestCandidates(candidatePath)) {
+        for (const manifestCandidate of await getManifestCandidates(candidatePath)) {
           addCandidate(manifestCandidate);
         }
       }
@@ -343,7 +363,7 @@ export const buildIconCandidates = (appName: string, exePath: string | null): Ic
             addCandidate(adjacentCandidate);
           }
 
-          for (const manifestCandidate of buildAppxManifestCandidates(candidatePath)) {
+          for (const manifestCandidate of await getManifestCandidates(candidatePath)) {
             addCandidate(manifestCandidate);
           }
         }

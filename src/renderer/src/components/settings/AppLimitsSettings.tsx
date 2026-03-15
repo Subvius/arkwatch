@@ -15,7 +15,11 @@ type AppLimitsSettingsProps = {
 
 const STEP_SECONDS = 15 * 60; // 15-min increments
 
-const isMissingLocalInstall = (app: TopAppStat, nativeIcons: Record<string, string>): boolean => {
+const isMissingLocalInstall = (app: TopAppStat, nativeIcons: Record<string, string>, iconsLoaded: boolean): boolean => {
+  if (!iconsLoaded) {
+    return false;
+  }
+
   const exePath = app.exePath?.trim();
   if (!exePath) {
     return false;
@@ -36,14 +40,25 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
   const [selectedApp, setSelectedApp] = React.useState<TopAppStat | null>(null);
   const [limitSeconds, setLimitSeconds] = React.useState(STEP_SECONDS * 4); // 60 min default
   const [nativeIcons, setNativeIcons] = React.useState<Record<string, string>>({});
+  const [pickerIconsLoaded, setPickerIconsLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    if (!adding) return;
+    if (!adding) {
+      setPickerIconsLoaded(false);
+      return;
+    }
+
+    let cancelled = false;
     const load = async (): Promise<void> => {
+      setPickerIconsLoaded(false);
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).toISOString();
       const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
       const apps = await window.arkwatch.stats.getTopApps({ from, to, limit: 50 });
+      if (cancelled) {
+        return;
+      }
+
       setAvailableApps(apps);
 
       const icons: Record<string, string> = {};
@@ -57,9 +72,24 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
           // ignore
         }
       }
+
+      if (cancelled) {
+        return;
+      }
+
       setNativeIcons((prev) => ({ ...prev, ...icons }));
+      setPickerIconsLoaded(true);
     };
-    void load();
+
+    void load().catch(() => {
+      if (!cancelled) {
+        setPickerIconsLoaded(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [adding]);
 
   React.useEffect(() => {
@@ -80,7 +110,7 @@ export const AppLimitsSettings = ({ limits, onUpsert, onRemove }: AppLimitsSetti
     if (limits.length > 0) void loadLimitIcons();
   }, [limits]);
 
-  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName) && !isMissingLocalInstall(app, nativeIcons));
+  const filteredApps = availableApps.filter((app) => !limits.some((l) => l.appName === app.appName) && !isMissingLocalInstall(app, nativeIcons, pickerIconsLoaded));
 
   const handleAdd = (): void => {
     if (!selectedApp) return;

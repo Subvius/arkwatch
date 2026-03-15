@@ -11,9 +11,9 @@ describe('app icon resolver helpers', () => {
     await Promise.all(tempDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
   });
 
-  it('adds sibling and parent asset candidates for versioned executable installs', () => {
+  it('adds sibling and parent asset candidates for versioned executable installs', async () => {
     const exePath = 'C:\\Users\\karim\\AppData\\Local\\SampleApp\\app-1.2.3\\SampleApp.exe';
-    const candidates = buildIconCandidates('Sample App', exePath);
+    const candidates = await buildIconCandidates('Sample App', exePath);
 
     expect(candidates[0]).toEqual({ kind: 'file-icon', path: exePath });
     expect(candidates).toContainEqual({
@@ -26,9 +26,9 @@ describe('app icon resolver helpers', () => {
     });
   });
 
-  it('adds packaged desktop resource logo candidates for installed apps', () => {
+  it('adds packaged desktop resource logo candidates for installed apps', async () => {
     const exePath = 'C:\\Users\\karim\\AppData\\Local\\Programs\\ArkWatch\\ArkWatch.exe';
-    const candidates = buildIconCandidates('ArkWatch', exePath);
+    const candidates = await buildIconCandidates('ArkWatch', exePath);
 
     expect(candidates).toContainEqual({
       kind: 'image-file',
@@ -62,7 +62,7 @@ describe('app icon resolver helpers', () => {
     await fs.writeFile(path.join(imageDirectory, 'Square44x44Logo.scale-200.png'), '');
     await fs.writeFile(path.join(imageDirectory, 'Square150x150Logo.scale-200.png'), '');
 
-    const candidates = buildIconCandidates('Raycast', exePath);
+    const candidates = await buildIconCandidates('Raycast', exePath);
 
     expect(candidates).toContainEqual({
       kind: 'image-file',
@@ -74,9 +74,9 @@ describe('app icon resolver helpers', () => {
     });
   });
 
-  it('keeps the fallback generic for any executable path, not just Discord', () => {
+  it('keeps the fallback generic for any executable path, not just Discord', async () => {
     const exePath = 'D:\\Tools\\WidgetSuite\\build-42\\Widget.exe';
-    const candidates = buildIconCandidates('Completely Different Name', exePath);
+    const candidates = await buildIconCandidates('Completely Different Name', exePath);
 
     expect(candidates).toContainEqual({ kind: 'file-icon', path: exePath });
     expect(candidates).toContainEqual({

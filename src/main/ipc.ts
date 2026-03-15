@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import type { AIToolProcess, AppSettings, DateRange, FocusSchedule, TrackerStatus } from '../shared/types';
 import { ArkWatchDatabase } from './db/database';
@@ -33,6 +33,14 @@ const getGenericExeIcon = async (size: 'large' | 'normal' | 'small'): Promise<st
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 const toCandidateCacheKey = (candidate: IconCandidate): string => `${candidate.kind}:${candidate.path}`;
+const pathExists = async (targetPath: string): Promise<boolean> => {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const mapProcessesForRenderer = (processes: Map<string, { name: string; running: boolean }>): AIToolProcess[] =>
   Array.from(processes.entries()).map(([id, info]) => ({
@@ -173,7 +181,7 @@ export const registerIpcHandlers = (
         return iconByRequestKey.get(requestKey) ?? null;
       }
 
-      const candidates = buildIconCandidates(appName, exePath);
+      const candidates = await buildIconCandidates(appName, exePath);
       const iconSizes: Array<'large' | 'normal' | 'small'> = ['large', 'normal', 'small'];
 
       for (const candidate of candidates) {
@@ -188,7 +196,7 @@ export const registerIpcHandlers = (
         }
 
         const looksLikePath = candidate.path.includes('\\') || candidate.path.includes('/');
-        if (looksLikePath && !existsSync(candidate.path)) {
+        if (looksLikePath && !(await pathExists(candidate.path))) {
           iconByCandidateKey.set(candidateKey, null);
           continue;
         }
