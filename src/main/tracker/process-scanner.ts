@@ -81,6 +81,17 @@ const areSnapshotsEqual = (left: ReadonlyArray<AIToolProcess>, right: ReadonlyAr
     return other !== undefined && item.id === other.id && item.name === other.name && item.running === other.running;
   });
 
+const notifyListener = (
+  listener: (processes: ReadonlyArray<AIToolProcess>) => void,
+  processes: ReadonlyArray<AIToolProcess>
+): void => {
+  try {
+    listener(processes);
+  } catch (error) {
+    console.error('[process-scanner] process listener failed', error);
+  }
+};
+
 export const scanBackgroundProcesses = async (): Promise<Map<string, BackgroundProcess>> => {
   const results = mapProcessNamesToAITools([]);
 
@@ -127,7 +138,7 @@ export class BackgroundProcessTracker {
 
   onProcessesChanged(callback: (processes: ReadonlyArray<AIToolProcess>) => void): () => void {
     this.listeners.add(callback);
-    callback(this.lastSnapshot);
+    notifyListener(callback, this.lastSnapshot);
 
     return () => {
       this.listeners.delete(callback);
@@ -165,7 +176,7 @@ export class BackgroundProcessTracker {
 
     this.lastSnapshot = nextSnapshot;
     for (const listener of this.listeners) {
-      listener(nextSnapshot);
+      notifyListener(listener, nextSnapshot);
     }
   }
 

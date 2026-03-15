@@ -153,6 +153,8 @@ export const App = (): React.JSX.Element => {
   const lastIdleStateRef = React.useRef(false);
   const elephantRef = React.useRef<ElephantMascotHandle>(null);
   const prevAppRef = React.useRef<string | null>(null);
+  const processStateVersionRef = React.useRef(0);
+  const processPullRequestRef = React.useRef(0);
 
   // Track dark mode for theme-dependent configs
   const [isDark, setIsDark] = React.useState(document.documentElement.classList.contains('dark'));
@@ -241,7 +243,15 @@ export const App = (): React.JSX.Element => {
   }, []);
 
   const loadProcesses = React.useCallback(async () => {
+    const requestId = processPullRequestRef.current + 1;
+    processPullRequestRef.current = requestId;
+    const pushVersionAtRequest = processStateVersionRef.current;
     const processes = await window.arkwatch.processes.getAITools();
+
+    if (requestId !== processPullRequestRef.current || pushVersionAtRequest < processStateVersionRef.current) {
+      return;
+    }
+
     setAiProcesses(processes);
   }, []);
 
@@ -459,6 +469,7 @@ export const App = (): React.JSX.Element => {
 
   React.useEffect(() => {
     return window.arkwatch.processes.onChanged((processes) => {
+      processStateVersionRef.current += 1;
       setAiProcesses(processes);
     });
   }, []);
@@ -960,6 +971,7 @@ export const App = (): React.JSX.Element => {
     </TooltipProvider>
   );
 };
+
 
 
 
